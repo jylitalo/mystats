@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"log/slog"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -23,26 +22,31 @@ func fetchCmd() *cobra.Command {
 			if err != nil {
 				log.Fatal(err)
 			}
-			fmt.Printf("cfg=%#v\n", cfg)
 			strava.ClientId = cfg.ClientID
 			strava.ClientSecret = cfg.ClientSecret
 			client := strava.NewClient(cfg.AccessToken)
-			fmt.Printf("%#v\n", *client)
 			current := strava.NewCurrentAthleteService(client)
-			fmt.Printf("%#v\n", *current)
 			call := current.ListActivities()
-			fmt.Printf("%#v\n", *call)
-			activities, err := call.Do()
-			if err != nil {
-				slog.Error("err from activities.Do", "err", err)
-				log.Fatal("Run mystats configure --client_id=... --client_secret=... first.")
+			stay := true
+			for page := 0; stay; page++ {
+				if page > 0 {
+					call = call.Page(page)
+				}
+				activities, err := call.Do()
+				if err != nil {
+					if page == 0 {
+						log.Fatalf("Run mystats configure --client_id=... --client_secret=... first. err=%v", err)
+					}
+					return err
+				}
+				j, err := json.Marshal(activities)
+				if err != nil {
+					log.Fatal(err)
+				}
+				fmt.Printf("page %d ...\n", page+1)
+				os.WriteFile(fmt.Sprintf("page%d.json", page), j, 0644)
+				stay = (len(activities) == 30)
 			}
-			j, err := json.Marshal(activities)
-			if err != nil {
-				log.Fatal(err)
-			}
-			fmt.Println(string(j))
-			os.WriteFile("page0.json", j, 0644)
 			return nil
 		},
 	}
