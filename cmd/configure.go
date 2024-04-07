@@ -27,11 +27,12 @@ func configureCmd() *cobra.Command {
 		Use:   "configure --client_id=[int] --client_secret=[string]",
 		Short: "Create config file for mystat",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			clientID, _ := cmd.Flags().GetInt("client_id")
+			flags := cmd.Flags()
+			clientID, _ := flags.GetInt("client_id")
 			if clientID == 0 {
 				return errors.New("client_id argument missing")
 			}
-			clientSecret, _ := cmd.Flags().GetString("client_secret")
+			clientSecret, _ := flags.GetString("client_secret")
 			if clientSecret == "" {
 				return errors.New("client_secret argument missing")
 			}

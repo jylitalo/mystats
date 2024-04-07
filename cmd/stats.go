@@ -33,6 +33,16 @@ func statsCmd() *cobra.Command {
 		Use:   "stats",
 		Short: "Create year to year comparisons",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			flags := cmd.Flags()
+			measurement, _ := flags.GetString("measure")
+			period, _ := flags.GetString("period")
+			itemsInPeriod := map[string]int{
+				"month": 12,
+				"week":  53,
+			}
+			if _, ok := itemsInPeriod[period]; !ok {
+				return fmt.Errorf("unknown period: %s", period)
+			}
 			dbFile := "mystats.sql"
 			db, err := sql.Open("sqlite3", dbFile)
 			if err != nil {
@@ -47,26 +57,36 @@ func statsCmd() *cobra.Command {
 			for idx, year := range years {
 				yearIndex[year] = idx
 			}
-			results := [53][]string{}
-			for idx := range 53 {
+			results := make([][]string, itemsInPeriod[period])
+			for idx := range itemsInPeriod[period] {
 				results[idx] = make([]string, len(years))
 				for year := range len(years) {
 					results[idx][year] = "    "
 				}
 			}
-			rows, err := db.Query(`select year,week,sum(distance) from mystats where type="Run" group by year,week order by week,year`)
+			q := fmt.Sprintf(
+				`select year,%s,%s from mystats where type="Run" group by year,%s order by %s,year`,
+				period, measurement, period, period,
+			)
+			rows, err := db.Query(q)
 			if err != nil {
-				return fmt.Errorf("select caused: %w", err)
+				return fmt.Errorf("%s caused: %w", q, err)
 			}
 			defer rows.Close()
 			for rows.Next() {
-				var year, week int
-				var distance float64
-				err = rows.Scan(&year, &week, &distance)
+				var year, periodValue int
+				var measureValue float64
+				value := ""
+				err = rows.Scan(&year, &periodValue, &measureValue)
 				if err != nil {
 					return err
 				}
-				results[week-1][yearIndex[year]] = fmt.Sprintf("%4.0f", distance/1000)
+				if strings.Contains(measurement, "distance") {
+					value = fmt.Sprintf("%4.0f", measureValue/1000)
+				} else {
+					value = fmt.Sprintf("%4.0f", measureValue)
+				}
+				results[periodValue-1][yearIndex[year]] = value
 			}
 			fmt.Print("week")
 			for _, year := range years {
@@ -79,5 +99,7 @@ func statsCmd() *cobra.Command {
 			return nil
 		},
 	}
+	cmd.Flags().String("period", "week", "time period (week, month)")
+	cmd.Flags().String("measure", "sum(distance)", "measurement type (sum(distance), max(elevation), ...)")
 	return cmd
 }
