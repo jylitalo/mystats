@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -45,7 +44,7 @@ func configureCmd() *cobra.Command {
 			text, _ := reader.ReadString('\n')
 			stravaURL, err := url.ParseRequestURI(strings.TrimSpace(text))
 			if err != nil {
-				log.Fatal(err)
+				return err
 			}
 			stravaArgs := stravaURL.Query()
 			code := stravaArgs["code"]
@@ -59,22 +58,22 @@ func configureCmd() *cobra.Command {
 			)
 			req, err := http.NewRequest("POST", url, nil)
 			if err != nil {
-				log.Fatal(err)
+				return err
 			}
 			client := &http.Client{}
 			resp, err := client.Do(req)
 			if err != nil {
-				log.Fatal(err)
+				return err
 			}
 			defer resp.Body.Close()
 			body, err := io.ReadAll(resp.Body)
 			if err != nil {
-				log.Fatal(err)
+				return err
 			}
 			slog.Debug("body from token", "body", string(body))
 			tokens := api.Config{}
 			if err = json.Unmarshal(body, &tokens); err != nil {
-				log.Fatal(err)
+				return err
 			}
 			tokens.ClientID = clientID
 			tokens.ClientSecret = clientSecret
@@ -82,7 +81,7 @@ func configureCmd() *cobra.Command {
 				Strava: tokens,
 			})
 			if err != nil {
-				log.Fatal(err)
+				return err
 			}
 			fmt.Println(string(cfgText))
 			return nil

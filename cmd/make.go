@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -34,18 +33,18 @@ func makeCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			fnames, err := filepath.Glob("pages/page*.json")
 			if err != nil {
-				log.Fatal(err)
+				return err
 			}
 			ids := map[int64]string{}
 			activities := []strava.ActivitySummary{}
 			for _, fname := range fnames {
 				body, err := os.ReadFile(fname)
 				if err != nil {
-					log.Fatal(err)
+					return err
 				}
 				page := []strava.ActivitySummary{}
 				if err = json.Unmarshal(body, &page); err != nil {
-					log.Fatal(err)
+					return err
 				}
 				for _, p := range page {
 					if val, ok := ids[p.Id]; ok {
@@ -76,7 +75,7 @@ func makeCmd() *cobra.Command {
 			os.Remove(dbFile)
 			db, err := sql.Open("sqlite3", dbFile)
 			if err != nil {
-				log.Fatal(err)
+				return err
 			}
 			defer db.Close()
 			_, err = db.Exec(`create table mystats (
@@ -91,15 +90,15 @@ func makeCmd() *cobra.Command {
 				MovingTime integer
 			)`)
 			if err != nil {
-				log.Fatal(fmt.Errorf("create table caused: %w", err))
+				return fmt.Errorf("create table caused: %w", err)
 			}
 			tx, err := db.Begin()
 			if err != nil {
-				log.Fatal(err)
+				return err
 			}
 			stmt, err := tx.Prepare(`insert into mystats(Year,Month,Day,Week,StravaID,Type,Distance,Elevation,MovingTime) values (?,?,?,?,?,?,?,?,?)`)
 			if err != nil {
-				log.Fatal(fmt.Errorf("insert caused %w", err))
+				return fmt.Errorf("insert caused %w", err)
 			}
 			defer stmt.Close()
 			for _, dbAct := range dbActivities {
@@ -108,11 +107,11 @@ func makeCmd() *cobra.Command {
 					dbAct.Distance, dbAct.Elevation, dbAct.MovingTime,
 				)
 				if err != nil {
-					log.Fatal(fmt.Errorf("statement execution caused: %w", err))
+					return fmt.Errorf("statement execution caused: %w", err)
 				}
 			}
 			if err = tx.Commit(); err != nil {
-				log.Fatal(fmt.Errorf("commit caused %w", err))
+				return fmt.Errorf("commit caused %w", err)
 			}
 			return nil
 		},

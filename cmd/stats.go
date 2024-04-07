@@ -3,7 +3,6 @@ package cmd
 import (
 	"database/sql"
 	"fmt"
-	"log"
 	"strings"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -11,21 +10,21 @@ import (
 )
 
 // queryYears creates list of distinct years from which have records
-func queryYears(db *sql.DB) []int {
+func queryYears(db *sql.DB) ([]int, error) {
 	years := []int{}
 	rows, err := db.Query(`select distinct(year) from mystats where type="Run" order by year desc`)
 	if err != nil {
-		log.Fatal(fmt.Errorf("select caused: %w", err))
+		return years, fmt.Errorf("select caused: %w", err)
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var year int
 		if err = rows.Scan(&year); err != nil {
-			log.Fatal(err)
+			return years, err
 		}
 		years = append(years, year)
 	}
-	return years
+	return years, nil
 }
 
 // fetchCmd fetches activity data from Strava
@@ -37,10 +36,13 @@ func statsCmd() *cobra.Command {
 			dbFile := "mystats.sql"
 			db, err := sql.Open("sqlite3", dbFile)
 			if err != nil {
-				log.Fatal(err)
+				return err
 			}
 			defer db.Close()
-			years := queryYears(db)
+			years, err := queryYears(db)
+			if err != nil {
+				return err
+			}
 			yearIndex := map[int]int{}
 			for idx, year := range years {
 				yearIndex[year] = idx
@@ -54,7 +56,7 @@ func statsCmd() *cobra.Command {
 			}
 			rows, err := db.Query(`select year,week,sum(distance) from mystats where type="Run" group by year,week order by week,year`)
 			if err != nil {
-				log.Fatal(fmt.Errorf("select caused: %w", err))
+				return fmt.Errorf("select caused: %w", err)
 			}
 			defer rows.Close()
 			for rows.Next() {
@@ -62,7 +64,7 @@ func statsCmd() *cobra.Command {
 				var distance float64
 				err = rows.Scan(&year, &week, &distance)
 				if err != nil {
-					log.Fatal(err)
+					return err
 				}
 				results[week-1][yearIndex[year]] = fmt.Sprintf("%4.0f", distance/1000)
 			}
