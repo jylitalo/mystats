@@ -36,13 +36,14 @@ func statsCmd() *cobra.Command {
 			flags := cmd.Flags()
 			measurement, _ := flags.GetString("measure")
 			period, _ := flags.GetString("period")
-			itemsInPeriod := map[string]int{
+			inYear := map[string]int{
 				"month": 12,
 				"week":  53,
 			}
-			if _, ok := itemsInPeriod[period]; !ok {
+			if _, ok := inYear[period]; !ok {
 				return fmt.Errorf("unknown period: %s", period)
 			}
+			results := make([][]string, inYear[period])
 			dbFile := "mystats.sql"
 			db, err := sql.Open("sqlite3", dbFile)
 			if err != nil {
@@ -57,20 +58,20 @@ func statsCmd() *cobra.Command {
 			for idx, year := range years {
 				yearIndex[year] = idx
 			}
-			results := make([][]string, itemsInPeriod[period])
-			for idx := range itemsInPeriod[period] {
-				results[idx] = make([]string, len(years))
-				for year := range len(years) {
+			columns := len(years)
+			for idx := range results {
+				results[idx] = make([]string, columns)
+				for year := range columns {
 					results[idx][year] = "    "
 				}
 			}
-			q := fmt.Sprintf(
+			query := fmt.Sprintf(
 				`select year,%s,%s from mystats where type="Run" group by year,%s order by %s,year`,
 				period, measurement, period, period,
 			)
-			rows, err := db.Query(q)
+			rows, err := db.Query(query)
 			if err != nil {
-				return fmt.Errorf("%s caused: %w", q, err)
+				return fmt.Errorf("%s caused: %w", query, err)
 			}
 			defer rows.Close()
 			for rows.Next() {
@@ -88,13 +89,13 @@ func statsCmd() *cobra.Command {
 				}
 				results[periodValue-1][yearIndex[year]] = value
 			}
-			fmt.Print("week")
+			fmt.Printf("%-5s", period)
 			for _, year := range years {
 				fmt.Printf(",%d", year)
 			}
 			fmt.Println()
 			for idx := range results {
-				fmt.Printf("%4d,%s\n", idx+1, strings.Join(results[idx], ","))
+				fmt.Printf("%5d,%s\n", idx+1, strings.Join(results[idx], ","))
 			}
 			return nil
 		},
