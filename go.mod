@@ -3,6 +3,7 @@ module github.com/jylitalo/mystats
 go 1.22.1
 
 require (
+	github.com/mattn/go-sqlite3 v1.14.22
 	github.com/spf13/cobra v1.8.0
 	github.com/spf13/viper v1.18.2
 	github.com/strava/go.strava v0.0.0-20180612235916-99ebe972ba16

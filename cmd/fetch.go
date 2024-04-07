@@ -28,6 +28,9 @@ func fetchCmd() *cobra.Command {
 			current := strava.NewCurrentAthleteService(client)
 			call := current.ListActivities()
 			stay := true
+			if err = os.Mkdir("pages", 0755); err != nil {
+				log.Fatal(err)
+			}
 			for page := 0; stay; page++ {
 				if page > 0 {
 					call = call.Page(page)
@@ -44,7 +47,7 @@ func fetchCmd() *cobra.Command {
 					log.Fatal(err)
 				}
 				fmt.Printf("page %d ...\n", page+1)
-				os.WriteFile(fmt.Sprintf("page%d.json", page), j, 0644)
+				os.WriteFile(fmt.Sprintf("pages/page%d.json", page), j, 0644)
 				stay = (len(activities) == 30)
 			}
 			return nil
