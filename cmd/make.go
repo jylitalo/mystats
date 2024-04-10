@@ -2,15 +2,13 @@ package cmd
 
 import (
 	"database/sql"
-	"encoding/json"
 	"fmt"
-	"log/slog"
 	"os"
 	"path/filepath"
 
+	"github.com/jylitalo/mystats/api"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/spf13/cobra"
-	strava "github.com/strava/go.strava"
 )
 
 type dbEntry struct {
@@ -35,27 +33,11 @@ func makeCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			ids := map[int64]string{}
-			activities := []strava.ActivitySummary{}
-			for _, fname := range fnames {
-				body, err := os.ReadFile(fname)
-				if err != nil {
-					return err
-				}
-				page := []strava.ActivitySummary{}
-				if err = json.Unmarshal(body, &page); err != nil {
-					return err
-				}
-				for _, p := range page {
-					if val, ok := ids[p.Id]; ok {
-						slog.Error("id exists in multiple pages", "id", p.Id, "current", fname, "previos", val)
-					} else {
-						ids[p.Id] = fname
-						activities = append(activities, p)
-					}
-				}
-			}
 			dbActivities := []dbEntry{}
+			activities, err := api.ReadJSONs(fnames)
+			if err != nil {
+				return err
+			}
 			for _, activity := range activities {
 				t := activity.StartDateLocal
 				year, week := t.ISOWeek()

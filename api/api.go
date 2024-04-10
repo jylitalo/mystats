@@ -6,7 +6,10 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"os"
 	"time"
+
+	strava "github.com/strava/go.strava"
 )
 
 type Config struct {
@@ -51,7 +54,7 @@ func (cfg *Config) AuthorizationCode(code string) (*Config, error) {
 func (cfg *Config) Refresh() (*Config, bool, error) {
 	now := time.Now().Unix()
 	if cfg.ExpiresAt > now {
-		return nil, false, nil
+		return cfg, false, nil
 	}
 	url := fmt.Sprintf(
 		"%s?client_id=%d&client_secret=%s&refresh_token=%s&grant_type=refresh_token",
@@ -79,4 +82,28 @@ func (cfg *Config) Refresh() (*Config, bool, error) {
 	tokens.ClientID = cfg.ClientID
 	tokens.ClientSecret = cfg.ClientSecret
 	return &tokens, true, nil
+}
+
+func ReadJSONs(fnames []string) ([]strava.ActivitySummary, error) {
+	ids := map[int64]string{}
+	activities := []strava.ActivitySummary{}
+	for _, fname := range fnames {
+		body, err := os.ReadFile(fname)
+		if err != nil {
+			return activities, err
+		}
+		page := []strava.ActivitySummary{}
+		if err = json.Unmarshal(body, &page); err != nil {
+			return activities, err
+		}
+		for _, p := range page {
+			if val, ok := ids[p.Id]; ok {
+				slog.Error("id exists in multiple pages", "id", p.Id, "current", fname, "previos", val)
+			} else {
+				ids[p.Id] = fname
+				activities = append(activities, p)
+			}
+		}
+	}
+	return activities, nil
 }

@@ -4,10 +4,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
+	"time"
 
 	"github.com/spf13/cobra"
 	strava "github.com/strava/go.strava"
 
+	"github.com/jylitalo/mystats/api"
 	"github.com/jylitalo/mystats/config"
 )
 
@@ -17,6 +20,28 @@ func fetchCmd() *cobra.Command {
 		Use:   "fetch",
 		Short: "Fetch activity data from Strava",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			var epoch time.Time
+			offset := 0
+			fnames, err := filepath.Glob("pages/page*.json")
+			switch {
+			case err != nil:
+				return err
+			case len(fnames) == 0:
+				if err = os.Mkdir("pages", 0755); err != nil {
+					return err
+				}
+			default:
+				offset = len(fnames)
+				activities, err := api.ReadJSONs(fnames)
+				if err != nil {
+					return err
+				}
+				for _, act := range activities {
+					if act.StartDateLocal.After(epoch) {
+						epoch = act.StartDateLocal
+					}
+				}
+			}
 			cfg, err := config.Get()
 			if err != nil {
 				return err
@@ -26,14 +51,9 @@ func fetchCmd() *cobra.Command {
 			client := strava.NewClient(cfg.AccessToken)
 			current := strava.NewCurrentAthleteService(client)
 			call := current.ListActivities()
+			call = call.After(int(epoch.Unix()))
 			stay := true
-			if err = os.Mkdir("pages", 0755); err != nil {
-				return err
-			}
-			for page := 0; stay; page++ {
-				if page > 0 {
-					call = call.Page(page)
-				}
+			for page := 1; stay; page++ {
 				activities, err := call.Do()
 				if err != nil {
 					if page == 0 {
@@ -42,11 +62,11 @@ func fetchCmd() *cobra.Command {
 					return err
 				}
 				j, err := json.Marshal(activities)
-				if err != nil {
+				if err != nil || len(activities) == 0 {
 					return err
 				}
-				fmt.Printf("page %d ...\n", page+1)
-				os.WriteFile(fmt.Sprintf("pages/page%d.json", page), j, 0644)
+				fmt.Printf("%d => pages/page%d.json ...\n", page, page+offset)
+				os.WriteFile(fmt.Sprintf("pages/page%d.json", page+offset), j, 0644)
 				stay = (len(activities) == 30)
 			}
 			return nil
