@@ -2,18 +2,14 @@ package cmd
 
 import (
 	"bufio"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
-	"net/http"
 	"net/url"
 	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v2"
 
 	"github.com/jylitalo/mystats/api"
 	"github.com/jylitalo/mystats/config"
@@ -53,38 +49,16 @@ func configureCmd() *cobra.Command {
 				return errors.New("code missing from authorize request")
 			}
 			slog.Debug("code from authorize", "code", code[0])
-			url := fmt.Sprintf(
-				"https://www.strava.com/oauth/token?client_id=%d&client_secret=%s&code=%s&grant_type=authorization_code",
-				clientID, clientSecret, code[0],
-			)
-			req, err := http.NewRequest("POST", url, nil)
+			tokens := &api.Config{ClientID: clientID, ClientSecret: clientSecret}
+			if tokens, err = tokens.AuthorizationCode(code[0]); err != nil {
+				return err
+			}
+			cfg := config.Config{Strava: *tokens}
+			fname, err := cfg.Write()
 			if err != nil {
 				return err
 			}
-			client := &http.Client{}
-			resp, err := client.Do(req)
-			if err != nil {
-				return err
-			}
-			defer resp.Body.Close()
-			body, err := io.ReadAll(resp.Body)
-			if err != nil {
-				return err
-			}
-			slog.Debug("body from token", "body", string(body))
-			tokens := api.Config{}
-			if err = json.Unmarshal(body, &tokens); err != nil {
-				return err
-			}
-			tokens.ClientID = clientID
-			tokens.ClientSecret = clientSecret
-			cfgText, err := yaml.Marshal(config.Config{
-				Strava: tokens,
-			})
-			if err != nil {
-				return err
-			}
-			fmt.Println(string(cfgText))
+			fmt.Printf("Wrote configuration file into " + fname)
 			return nil
 		},
 	}
