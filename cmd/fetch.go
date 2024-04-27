@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	strava "github.com/strava/go.strava"
 
 	"github.com/jylitalo/mystats/api"
 	"github.com/jylitalo/mystats/config"
@@ -20,15 +19,17 @@ func fetchCmd() *cobra.Command {
 		Use:   "fetch",
 		Short: "Fetch activity data from Strava",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			var epoch time.Time
+			epoch := time.Date(1970, time.January, 1, 0, 0, 0, 0, time.UTC)
 			offset := 0
 			fnames, err := filepath.Glob("pages/page*.json")
 			switch {
 			case err != nil:
 				return err
 			case len(fnames) == 0:
-				if err = os.Mkdir("pages", 0755); err != nil {
-					return err
+				if _, err = os.Stat("pages"); os.IsNotExist(err) {
+					if err = os.Mkdir("pages", 0755); err != nil {
+						return err
+					}
 				}
 			default:
 				offset = len(fnames)
@@ -46,17 +47,18 @@ func fetchCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			strava.ClientId = cfg.ClientID
-			strava.ClientSecret = cfg.ClientSecret
-			client := strava.NewClient(cfg.AccessToken)
-			current := strava.NewCurrentAthleteService(client)
+			api.ClientId = cfg.ClientID
+			api.ClientSecret = cfg.ClientSecret
+			client := api.NewClient(cfg.AccessToken)
+			current := api.NewCurrentAthleteService(client)
 			call := current.ListActivities()
 			call = call.After(int(epoch.Unix()))
 			stay := true
 			for page := 1; stay; page++ {
+				call = call.Page(page)
 				activities, err := call.Do()
 				if err != nil {
-					if page == 0 {
+					if page == 1 {
 						return fmt.Errorf("run mystats configure --client_id=... --client_secret=... first. err=%w", err)
 					}
 					return err

@@ -12,15 +12,17 @@ import (
 )
 
 type dbEntry struct {
-	Year       int
-	Month      int
-	Day        int
-	Week       int
-	StravaID   int64
-	Type       string
-	Distance   float64
-	Elevation  float64
-	MovingTime int
+	Year        int
+	Month       int
+	Day         int
+	Week        int
+	StravaID    int64
+	Name        string
+	Type        string
+	WorkoutType string
+	Distance    float64
+	Elevation   float64
+	MovingTime  int
 }
 
 // fetchCmd fetches activity data from Strava
@@ -42,15 +44,17 @@ func makeCmd() *cobra.Command {
 				t := activity.StartDateLocal
 				year, week := t.ISOWeek()
 				dbActivities = append(dbActivities, dbEntry{
-					StravaID:   activity.Id,
-					Year:       year,
-					Month:      int(t.Month()),
-					Day:        t.Day(),
-					Week:       week,
-					Type:       activity.Type.String(),
-					Distance:   activity.Distance,
-					Elevation:  activity.TotalElevationGain,
-					MovingTime: activity.MovingTime,
+					StravaID:    activity.Id,
+					Year:        year,
+					Month:       int(t.Month()),
+					Day:         t.Day(),
+					Week:        week,
+					Name:        activity.Name,
+					Type:        activity.Type.String(),
+					WorkoutType: activity.WorkoutType(),
+					Distance:    activity.Distance,
+					Elevation:   activity.TotalElevationGain,
+					MovingTime:  activity.MovingTime,
 				})
 			}
 			dbFile := "mystats.sql"
@@ -61,15 +65,17 @@ func makeCmd() *cobra.Command {
 			}
 			defer db.Close()
 			_, err = db.Exec(`create table mystats (
-				Year       integer,
-				Month      integer,
-				Day        integer,
-				Week       integer,
-				StravaID   integer,
-				Type       text,
-				Distance   real,
-				Elevation  real,
-				MovingTime integer
+				Year        integer,
+				Month       integer,
+				Day         integer,
+				Week        integer,
+				StravaID    integer,
+				Name        text,
+				Type        text,
+				WorkoutType text,
+				Distance    real,
+				Elevation   real,
+				MovingTime  integer
 			)`)
 			if err != nil {
 				return fmt.Errorf("create table caused: %w", err)
@@ -78,14 +84,15 @@ func makeCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			stmt, err := tx.Prepare(`insert into mystats(Year,Month,Day,Week,StravaID,Type,Distance,Elevation,MovingTime) values (?,?,?,?,?,?,?,?,?)`)
+			stmt, err := tx.Prepare(`insert into mystats(Year,Month,Day,Week,StravaID,Name,Type,WorkoutType,Distance,Elevation,MovingTime) values (?,?,?,?,?,?,?,?,?,?,?)`)
 			if err != nil {
 				return fmt.Errorf("insert caused %w", err)
 			}
 			defer stmt.Close()
 			for _, dbAct := range dbActivities {
 				_, err = stmt.Exec(
-					dbAct.Year, dbAct.Month, dbAct.Day, dbAct.Week, dbAct.StravaID, dbAct.Type,
+					dbAct.Year, dbAct.Month, dbAct.Day, dbAct.Week, dbAct.StravaID,
+					dbAct.Name, dbAct.Type, dbAct.WorkoutType,
 					dbAct.Distance, dbAct.Elevation, dbAct.MovingTime,
 				)
 				if err != nil {

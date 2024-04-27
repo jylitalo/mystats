@@ -9,6 +9,6 @@ func Execute() error {
 		Use:   "mystats",
 		Short: "mystats is tool for fetching your Strava results to your machine",
 	}
-	rootCmd.AddCommand(configureCmd(), fetchCmd(), makeCmd(), statsCmd(), plotCmd())
+	rootCmd.AddCommand(configureCmd(), fetchCmd(), makeCmd(), statsCmd(), plotCmd(), listCmd())
 	return rootCmd.Execute()
 }
