@@ -8,8 +8,6 @@ import (
 	"net/http"
 	"os"
 	"time"
-
-	strava "github.com/strava/go.strava"
 )
 
 type Config struct {
@@ -84,21 +82,21 @@ func (cfg *Config) Refresh() (*Config, bool, error) {
 	return &tokens, true, nil
 }
 
-func ReadJSONs(fnames []string) ([]strava.ActivitySummary, error) {
+func ReadJSONs(fnames []string) ([]ActivitySummary, error) {
 	ids := map[int64]string{}
-	activities := []strava.ActivitySummary{}
+	activities := []ActivitySummary{}
 	for _, fname := range fnames {
 		body, err := os.ReadFile(fname)
 		if err != nil {
 			return activities, err
 		}
-		page := []strava.ActivitySummary{}
+		page := []ActivitySummary{}
 		if err = json.Unmarshal(body, &page); err != nil {
 			return activities, err
 		}
 		for _, p := range page {
 			if val, ok := ids[p.Id]; ok {
-				slog.Error("id exists in multiple pages", "id", p.Id, "current", fname, "previos", val)
+				slog.Error("id exists in multiple pages", "id", p.Id, "current", fname, "previous", val)
 			} else {
 				ids[p.Id] = fname
 				activities = append(activities, p)
