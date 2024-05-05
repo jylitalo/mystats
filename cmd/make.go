@@ -1,29 +1,14 @@
 package cmd
 
 import (
-	"database/sql"
-	"fmt"
-	"os"
 	"path/filepath"
 
-	"github.com/jylitalo/mystats/api"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/spf13/cobra"
-)
 
-type dbEntry struct {
-	Year        int
-	Month       int
-	Day         int
-	Week        int
-	StravaID    int64
-	Name        string
-	Type        string
-	WorkoutType string
-	Distance    float64
-	Elevation   float64
-	MovingTime  int
-}
+	"github.com/jylitalo/mystats/api"
+	"github.com/jylitalo/mystats/storage"
+)
 
 // fetchCmd fetches activity data from Strava
 func makeCmd() *cobra.Command {
@@ -35,7 +20,7 @@ func makeCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			dbActivities := []dbEntry{}
+			dbActivities := []storage.Record{}
 			activities, err := api.ReadJSONs(fnames)
 			if err != nil {
 				return err
@@ -43,7 +28,7 @@ func makeCmd() *cobra.Command {
 			for _, activity := range activities {
 				t := activity.StartDateLocal
 				year, week := t.ISOWeek()
-				dbActivities = append(dbActivities, dbEntry{
+				dbActivities = append(dbActivities, storage.Record{
 					StravaID:    activity.Id,
 					Year:        year,
 					Month:       int(t.Month()),
@@ -57,52 +42,16 @@ func makeCmd() *cobra.Command {
 					MovingTime:  activity.MovingTime,
 				})
 			}
-			dbFile := "mystats.sql"
-			os.Remove(dbFile)
-			db, err := sql.Open("sqlite3", dbFile)
-			if err != nil {
+			db := storage.Sqlite3{}
+			db.Remove()
+			if err = db.Open(); err != nil {
+				return err
+			}
+			if err := db.Create(); err != nil {
 				return err
 			}
 			defer db.Close()
-			_, err = db.Exec(`create table mystats (
-				Year        integer,
-				Month       integer,
-				Day         integer,
-				Week        integer,
-				StravaID    integer,
-				Name        text,
-				Type        text,
-				WorkoutType text,
-				Distance    real,
-				Elevation   real,
-				MovingTime  integer
-			)`)
-			if err != nil {
-				return fmt.Errorf("create table caused: %w", err)
-			}
-			tx, err := db.Begin()
-			if err != nil {
-				return err
-			}
-			stmt, err := tx.Prepare(`insert into mystats(Year,Month,Day,Week,StravaID,Name,Type,WorkoutType,Distance,Elevation,MovingTime) values (?,?,?,?,?,?,?,?,?,?,?)`)
-			if err != nil {
-				return fmt.Errorf("insert caused %w", err)
-			}
-			defer stmt.Close()
-			for _, dbAct := range dbActivities {
-				_, err = stmt.Exec(
-					dbAct.Year, dbAct.Month, dbAct.Day, dbAct.Week, dbAct.StravaID,
-					dbAct.Name, dbAct.Type, dbAct.WorkoutType,
-					dbAct.Distance, dbAct.Elevation, dbAct.MovingTime,
-				)
-				if err != nil {
-					return fmt.Errorf("statement execution caused: %w", err)
-				}
-			}
-			if err = tx.Commit(); err != nil {
-				return fmt.Errorf("commit caused %w", err)
-			}
-			return nil
+			return db.Insert(dbActivities)
 		},
 	}
 	return cmd

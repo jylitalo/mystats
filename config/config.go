@@ -12,10 +12,13 @@ import (
 )
 
 type Config struct {
-	Strava api.Config `yaml:"strava"`
+	Strava  api.Config `yaml:"strava"`
+	Default struct {
+		Types []string `yaml:"types"`
+	} `yaml:"default"`
 }
 
-func Get() (*api.Config, error) {
+func Get() (*Config, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return nil, fmt.Errorf("error in UserHomeDir: %w", err)
@@ -33,14 +36,16 @@ func Get() (*api.Config, error) {
 		RefreshToken: vip.GetString("strava.refreshToken"),
 		ExpiresAt:    int64(vip.GetInt("strava.expiresAt")),
 	}
+	types := vip.GetStringSlice("default.types")
 	tokens, changes, err := tokens.Refresh()
+	cfg := Config{Strava: *tokens}
+	cfg.Default.Types = types
 	if err == nil && changes {
-		cfg := Config{Strava: *tokens}
 		if _, err := cfg.Write(); err != nil {
 			return nil, err
 		}
 	}
-	return tokens, nil
+	return &cfg, nil
 }
 
 func (cfg *Config) Write() (string, error) {

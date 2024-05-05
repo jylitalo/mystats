@@ -1,21 +1,25 @@
 package cmd
 
 import (
-	"database/sql"
 	"fmt"
 	"os"
 	"strconv"
 	"strings"
 
+	"github.com/jylitalo/mystats/storage"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/olekukonko/tablewriter"
 	"github.com/spf13/cobra"
 )
 
 // queryYears creates list of distinct years from which have records
-func queryYears(db *sql.DB) ([]int, error) {
+func queryYears(db *storage.Sqlite3) ([]int, error) {
 	years := []int{}
-	rows, err := db.Query(`select distinct(year) from mystats where type="Run" order by year desc`)
+	rows, err := db.Query(
+		[]string{"distinct(year)"},
+		storage.Conditions{Types: []string{"Run"}},
+		&storage.Order{Fields: []string{"year"}, Ascend: false},
+	)
 	if err != nil {
 		return years, fmt.Errorf("select caused: %w", err)
 	}
@@ -56,7 +60,7 @@ func printTable(period, measurement string, years []int, results [][]string) {
 	table.Render()
 }
 
-// fetchCmd fetches activity data from Strava
+// statsCmd turns sqlite db into table or csv by week/month/...
 func statsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "stats",
@@ -81,13 +85,12 @@ func statsCmd() *cobra.Command {
 				return fmt.Errorf("unknown format: %s", format)
 			}
 			results := make([][]string, inYear[period])
-			dbFile := "mystats.sql"
-			db, err := sql.Open("sqlite3", dbFile)
-			if err != nil {
+			db := storage.Sqlite3{}
+			if err := db.Open(); err != nil {
 				return err
 			}
 			defer db.Close()
-			years, err := queryYears(db)
+			years, err := queryYears(&db)
 			if err != nil {
 				return err
 			}
@@ -102,13 +105,13 @@ func statsCmd() *cobra.Command {
 					results[idx][year] = "    "
 				}
 			}
-			query := fmt.Sprintf(
-				`select year,%s,%s from mystats where type="Run" group by year,%s order by %s,year`,
-				period, measurement, period, period,
+			rows, err := db.Query(
+				[]string{"year", period, measurement},
+				storage.Conditions{Types: []string{"Run"}},
+				&storage.Order{Fields: []string{period, "year"}, Ascend: true},
 			)
-			rows, err := db.Query(query)
 			if err != nil {
-				return fmt.Errorf("%s caused: %w", query, err)
+				return fmt.Errorf("select caused: %w", err)
 			}
 			defer rows.Close()
 			for rows.Next() {

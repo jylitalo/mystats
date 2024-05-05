@@ -1,11 +1,11 @@
 package cmd
 
 import (
-	"database/sql"
 	"fmt"
 	"math"
 	"os"
 
+	"github.com/jylitalo/mystats/storage"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/olekukonko/tablewriter"
 	"github.com/spf13/cobra"
@@ -18,20 +18,19 @@ func listCmd() *cobra.Command {
 		Short: "List races or long runs",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			flags := cmd.Flags()
-			typeArg, _ := flags.GetString("type")
-			dbFile := "mystats.sql"
-			db, err := sql.Open("sqlite3", dbFile)
-			if err != nil {
+			workoutArg, _ := flags.GetString("workout")
+			db := storage.Sqlite3{}
+			if err := db.Open(); err != nil {
 				return err
 			}
 			defer db.Close()
-			query := fmt.Sprintf(
-				`select year,month,day,name,distance,elevation,movingtime from mystats where type="Run" and workouttype="%s" order by year,month,day`,
-				typeArg,
+			rows, err := db.Query(
+				[]string{"year", "month", "day", "name", "distance", "elevation", "movingtime"},
+				storage.Conditions{Workouts: []string{workoutArg}, Types: []string{"Run"}},
+				&storage.Order{Fields: []string{"year", "month", "day"}, Ascend: true},
 			)
-			rows, err := db.Query(query)
 			if err != nil {
-				return fmt.Errorf("%s caused: %w", query, err)
+				return fmt.Errorf("query caused: %w", err)
 			}
 			defer rows.Close()
 			table := tablewriter.NewWriter(os.Stdout)
@@ -54,6 +53,6 @@ func listCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().String("type", "Race", "workout type")
+	cmd.Flags().String("workout", "Race", "workout type")
 	return cmd
 }

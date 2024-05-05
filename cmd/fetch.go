@@ -47,9 +47,10 @@ func fetchCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			api.ClientId = cfg.ClientID
-			api.ClientSecret = cfg.ClientSecret
-			client := api.NewClient(cfg.AccessToken)
+			strava := cfg.Strava
+			api.ClientId = strava.ClientID
+			api.ClientSecret = strava.ClientSecret
+			client := api.NewClient(strava.AccessToken)
 			current := api.NewCurrentAthleteService(client)
 			call := current.ListActivities()
 			call = call.After(int(epoch.Unix()))

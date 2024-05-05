@@ -1,12 +1,12 @@
 package cmd
 
 import (
-	"database/sql"
 	"fmt"
 	"log"
 	"strconv"
 	"time"
 
+	"github.com/jylitalo/mystats/storage"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/spf13/cobra"
 	"go-hep.org/x/hep/hplot"
@@ -25,13 +25,12 @@ func plotCmd() *cobra.Command {
 			measurement, _ := flags.GetString("measure")
 			output, _ := flags.GetString("output")
 			tz, _ := time.LoadLocation("Europe/Helsinki")
-			dbFile := "mystats.sql"
-			db, err := sql.Open("sqlite3", dbFile)
-			if err != nil {
+			db := storage.Sqlite3{}
+			if err := db.Open(); err != nil {
 				return err
 			}
 			defer db.Close()
-			years, err := queryYears(db)
+			years, err := queryYears(&db)
 			if err != nil {
 				return err
 			}
@@ -43,13 +42,13 @@ func plotCmd() *cobra.Command {
 				ys[year] = []float64{}
 				totals[year] = 0
 			}
-			query := fmt.Sprintf(
-				`select year,month,day,sum(%s) from mystats where type="Run" group by year,month,day order by year,month,day`,
-				measurement,
+			rows, err := db.Query(
+				[]string{"year", "month", "day", "sum(" + measurement + ")"},
+				storage.Conditions{Types: []string{"Run"}},
+				&storage.Order{Fields: []string{"year", "month", "day"}, Ascend: true},
 			)
-			rows, err := db.Query(query)
 			if err != nil {
-				return fmt.Errorf("%s caused: %w", query, err)
+				return fmt.Errorf("select caused: %w", err)
 			}
 			defer rows.Close()
 			for rows.Next() {
