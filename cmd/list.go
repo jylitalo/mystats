@@ -12,13 +12,14 @@ import (
 )
 
 // listCmd turns sqlite db into table or csv by week/month/...
-func listCmd() *cobra.Command {
+func listCmd(types []string) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List races or long runs",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			flags := cmd.Flags()
-			workoutArg, _ := flags.GetString("workout")
+			types, _ := flags.GetStringSlice("type")
+			workouts, _ := flags.GetStringSlice("workout")
 			db := storage.Sqlite3{}
 			if err := db.Open(); err != nil {
 				return err
@@ -26,7 +27,7 @@ func listCmd() *cobra.Command {
 			defer db.Close()
 			rows, err := db.Query(
 				[]string{"year", "month", "day", "name", "distance", "elevation", "movingtime"},
-				storage.Conditions{Workouts: []string{workoutArg}, Types: []string{"Run"}},
+				storage.Conditions{Workouts: workouts, Types: types},
 				&storage.Order{Fields: []string{"year", "month", "day"}, Ascend: true},
 			)
 			if err != nil {
@@ -53,6 +54,7 @@ func listCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().String("workout", "Race", "workout type")
+	cmd.Flags().StringSlice("type", types, "sport types (run, trail run, ...)")
+	cmd.Flags().StringSlice("workout", []string{}, "workout type")
 	return cmd
 }

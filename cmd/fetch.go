@@ -43,7 +43,7 @@ func fetchCmd() *cobra.Command {
 					}
 				}
 			}
-			cfg, err := config.Get()
+			cfg, err := config.Get(true)
 			if err != nil {
 				return err
 			}

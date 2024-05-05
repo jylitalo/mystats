@@ -3,9 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 
-	"github.com/spf13/viper"
 	"gopkg.in/yaml.v2"
 
 	"github.com/jylitalo/mystats/api"
@@ -18,42 +16,43 @@ type Config struct {
 	} `yaml:"default"`
 }
 
-func Get() (*Config, error) {
+func configFile() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return nil, fmt.Errorf("error in UserHomeDir: %w", err)
+		return "", fmt.Errorf("error in UserHomeDir: %w", err)
 	}
-	vip := viper.GetViper()
-	vip.AddConfigPath(home)
-	vip.SetConfigName(".mystats")
-	if err = vip.ReadInConfig(); err != nil {
-		return nil, fmt.Errorf("error in getConfig: %w", err)
+	return home + "/.mystats.yaml", nil
+}
+
+func Get(refresh bool) (*Config, error) {
+	fname, err := configFile()
+	if err != nil {
+		return nil, err
 	}
-	tokens := &api.Config{
-		ClientID:     vip.GetInt("strava.clientID"),
-		ClientSecret: vip.GetString("strava.clientSecret"),
-		AccessToken:  vip.GetString("strava.accessToken"),
-		RefreshToken: vip.GetString("strava.refreshToken"),
-		ExpiresAt:    int64(vip.GetInt("strava.expiresAt")),
+	body, err := os.ReadFile(fname)
+	if err != nil {
+		return nil, fmt.Errorf("error in reading .mystats.yaml")
 	}
-	types := vip.GetStringSlice("default.types")
-	tokens, changes, err := tokens.Refresh()
-	cfg := Config{Strava: *tokens}
-	cfg.Default.Types = types
+	cfg := Config{}
+	if err = yaml.Unmarshal(body, &cfg); err != nil {
+		return nil, fmt.Errorf("error in parsing .mystats.yaml")
+	}
+	if !refresh {
+		return &cfg, nil
+	}
+	tokens, changes, err := cfg.Strava.Refresh()
 	if err == nil && changes {
-		if _, err := cfg.Write(); err != nil {
-			return nil, err
-		}
+		cfg.Strava = *tokens
+		_, err = cfg.Write()
 	}
-	return &cfg, nil
+	return &cfg, err
 }
 
 func (cfg *Config) Write() (string, error) {
-	home, err := os.UserHomeDir()
+	fname, err := configFile()
 	if err != nil {
 		return "", err
 	}
-	fname := filepath.Join(home, ".mystats.yaml")
 	text, err := yaml.Marshal(cfg)
 	if err != nil {
 		return "", err

@@ -16,7 +16,7 @@ import (
 )
 
 // plotCmd makes graphs from sqlite data
-func plotCmd() *cobra.Command {
+func plotCmd(types []string) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "plot",
 		Short: "Create graphics",
@@ -24,6 +24,7 @@ func plotCmd() *cobra.Command {
 			flags := cmd.Flags()
 			measurement, _ := flags.GetString("measure")
 			output, _ := flags.GetString("output")
+			types, _ := flags.GetStringSlice("type")
 			tz, _ := time.LoadLocation("Europe/Helsinki")
 			db := storage.Sqlite3{}
 			if err := db.Open(); err != nil {
@@ -44,7 +45,7 @@ func plotCmd() *cobra.Command {
 			}
 			rows, err := db.Query(
 				[]string{"year", "month", "day", "sum(" + measurement + ")"},
-				storage.Conditions{Types: []string{"Run"}},
+				storage.Conditions{Types: types},
 				&storage.Order{Fields: []string{"year", "month", "day"}, Ascend: true},
 			)
 			if err != nil {
@@ -92,5 +93,6 @@ func plotCmd() *cobra.Command {
 	}
 	cmd.Flags().String("output", "ytd.png", "output file")
 	cmd.Flags().String("measure", "distance", "measurement type (distance, elevation, ...)")
+	cmd.Flags().StringSlice("type", types, "sport types (run, trail run, ...)")
 	return cmd
 }

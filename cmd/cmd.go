@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"github.com/jylitalo/mystats/config"
 	"github.com/spf13/cobra"
 )
 
@@ -9,6 +10,10 @@ func Execute() error {
 		Use:   "mystats",
 		Short: "mystats is tool for fetching your Strava results to your machine",
 	}
-	rootCmd.AddCommand(configureCmd(), fetchCmd(), makeCmd(), statsCmd(), plotCmd(), listCmd())
+	types := []string{"Run", "Trail Run"}
+	if cfg, err := config.Get(false); err == nil {
+		types = cfg.Default.Types
+	}
+	rootCmd.AddCommand(configureCmd(), fetchCmd(), makeCmd(), statsCmd(types), plotCmd(types), listCmd(types))
 	return rootCmd.Execute()
 }

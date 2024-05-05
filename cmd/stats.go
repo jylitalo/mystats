@@ -61,7 +61,7 @@ func printTable(period, measurement string, years []int, results [][]string) {
 }
 
 // statsCmd turns sqlite db into table or csv by week/month/...
-func statsCmd() *cobra.Command {
+func statsCmd(types []string) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "stats",
 		Short: "Create year to year comparisons",
@@ -70,6 +70,7 @@ func statsCmd() *cobra.Command {
 			format, _ := flags.GetString("format")
 			measurement, _ := flags.GetString("measure")
 			period, _ := flags.GetString("period")
+			types, _ := flags.GetStringSlice("type")
 			inYear := map[string]int{
 				"month": 12,
 				"week":  53,
@@ -107,7 +108,7 @@ func statsCmd() *cobra.Command {
 			}
 			rows, err := db.Query(
 				[]string{"year", period, measurement},
-				storage.Conditions{Types: []string{"Run"}},
+				storage.Conditions{Types: types},
 				&storage.Order{Fields: []string{period, "year"}, Ascend: true},
 			)
 			if err != nil {
@@ -136,5 +137,6 @@ func statsCmd() *cobra.Command {
 	cmd.Flags().String("format", "csv", "output format (csv, table)")
 	cmd.Flags().String("measure", "sum(distance)", "measurement type (sum(distance), max(elevation), ...)")
 	cmd.Flags().String("period", "week", "time period (week, month)")
+	cmd.Flags().StringSlice("type", types, "sport types (run, trail run, ...)")
 	return cmd
 }
