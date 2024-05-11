@@ -13,11 +13,10 @@ import (
 )
 
 // queryYears creates list of distinct years from which have records
-func queryYears(db *storage.Sqlite3) ([]int, error) {
+func queryYears(db *storage.Sqlite3, cond storage.Conditions) ([]int, error) {
 	years := []int{}
 	rows, err := db.Query(
-		[]string{"distinct(year)"},
-		storage.Conditions{Types: []string{"Run"}},
+		[]string{"distinct(year)"}, cond,
 		&storage.Order{GroupBy: []string{"year"}, OrderBy: []string{"year desc"}},
 	)
 	if err != nil {
@@ -35,28 +34,35 @@ func queryYears(db *storage.Sqlite3) ([]int, error) {
 }
 
 // printCSV outputs results in CSV format
-func printCSV(period, measurement string, years []int, results [][]string) {
+func printCSV(period, measurement string, years []int, results [][]string, totals []string) {
 	fmt.Printf("%-5s", period)
 	for _, year := range years {
 		fmt.Printf(",%d", year)
 	}
 	fmt.Println()
 	for idx := range results {
-		fmt.Printf("%5d,%s\n", idx+1, strings.Join(results[idx], ","))
+		if strings.TrimSpace(strings.Join(results[idx], "")) != "" {
+			fmt.Printf("%5d,%s\n", idx+1, strings.Join(results[idx], ","))
+		}
 	}
+	fmt.Printf("TOTAL,%s\n", strings.Join(totals, ","))
 }
 
 // printTable outputs results in CSV format
-func printTable(period, measurement string, years []int, results [][]string) {
+func printTable(period, measurement string, years []int, results [][]string, totals []string) {
 	table := tablewriter.NewWriter(os.Stdout)
+	table.SetFooterAlignment(tablewriter.ALIGN_RIGHT)
 	header := []string{period}
 	for _, year := range years {
 		header = append(header, strconv.Itoa(year))
 	}
 	table.SetHeader(header)
 	for idx := range results {
-		table.Append(append([]string{strconv.Itoa(idx + 1)}, results[idx]...))
+		if strings.TrimSpace(strings.Join(results[idx], "")) != "" {
+			table.Append(append([]string{strconv.Itoa(idx + 1)}, results[idx]...))
+		}
 	}
+	table.SetFooter(append([]string{"total"}, totals...))
 	table.Render()
 }
 
@@ -71,6 +77,8 @@ func statsCmd(types []string) *cobra.Command {
 			measurement, _ := flags.GetString("measure")
 			period, _ := flags.GetString("period")
 			types, _ := flags.GetStringSlice("type")
+			month, _ := flags.GetInt("month")
+			day, _ := flags.GetInt("day")
 			inYear := map[string]int{
 				"month": 12,
 				"week":  53,
@@ -78,7 +86,8 @@ func statsCmd(types []string) *cobra.Command {
 			if _, ok := inYear[period]; !ok {
 				return fmt.Errorf("unknown period: %s", period)
 			}
-			formatFn := map[string]func(period string, measurement string, years []int, results [][]string){
+			cond := storage.Conditions{Types: types, Month: month, Day: day}
+			formatFn := map[string]func(period string, measurement string, years []int, results [][]string, totals []string){
 				"csv":   printCSV,
 				"table": printTable,
 			}
@@ -91,7 +100,7 @@ func statsCmd(types []string) *cobra.Command {
 				return err
 			}
 			defer db.Close()
-			years, err := queryYears(&db)
+			years, err := queryYears(&db, cond)
 			if err != nil {
 				return err
 			}
@@ -107,30 +116,33 @@ func statsCmd(types []string) *cobra.Command {
 				}
 			}
 			rows, err := db.Query(
-				[]string{"year", period, measurement},
-				storage.Conditions{Types: types},
+				[]string{"year", period, measurement}, cond,
 				&storage.Order{GroupBy: []string{period, "year"}, OrderBy: []string{period, "year"}},
 			)
 			if err != nil {
 				return fmt.Errorf("select caused: %w", err)
 			}
 			defer rows.Close()
+			totalsAbs := make([]float64, len(years))
+			modifier := float64(1)
+			if strings.Contains(measurement, "distance") && !strings.Contains(measurement, "count") {
+				modifier = 1000
+			}
 			for rows.Next() {
 				var year, periodValue int
 				var measureValue float64
-				value := ""
-				err = rows.Scan(&year, &periodValue, &measureValue)
-				if err != nil {
+				if err = rows.Scan(&year, &periodValue, &measureValue); err != nil {
 					return err
 				}
-				if strings.Contains(measurement, "distance") && !strings.Contains(measurement, "count") {
-					value = fmt.Sprintf("%4.0f", measureValue/1000)
-				} else {
-					value = fmt.Sprintf("%4.0f", measureValue)
-				}
-				results[periodValue-1][yearIndex[year]] = value
+				totalsAbs[yearIndex[year]] += measureValue / modifier
+				results[periodValue-1][yearIndex[year]] = fmt.Sprintf("%4.0f", measureValue/modifier)
 			}
-			formatFn[format](period, measurement, years, results)
+			totals := make([]string, len(years))
+			for idx := range totalsAbs {
+				totals[idx] = fmt.Sprintf("%4.0f", totalsAbs[idx])
+			}
+
+			formatFn[format](period, measurement, years, results, totals)
 			return nil
 		},
 	}
@@ -138,5 +150,7 @@ func statsCmd(types []string) *cobra.Command {
 	cmd.Flags().String("measure", "sum(distance)", "measurement type (sum(distance), max(elevation), ...)")
 	cmd.Flags().String("period", "week", "time period (week, month)")
 	cmd.Flags().StringSlice("type", types, "sport types (run, trail run, ...)")
+	cmd.Flags().Int("month", 0, "only search number of months")
+	cmd.Flags().Int("day", 0, "only search number of days from last --month")
 	return cmd
 }

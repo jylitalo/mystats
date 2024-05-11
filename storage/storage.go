@@ -28,6 +28,8 @@ type Record struct {
 type Conditions struct {
 	Types    []string
 	Workouts []string
+	Month    int
+	Day      int
 }
 
 type Order struct {
@@ -109,7 +111,9 @@ func sqlQuery(fields []string, cond Conditions, order *Order) string {
 	if cond.Types != nil {
 		where = append(where, "(type='"+strings.Join(cond.Types, "' or type='")+"')")
 	}
-
+	if cond.Month > 0 && cond.Day > 0 {
+		where = append(where, fmt.Sprintf("(month < %d or (month=%d and day<=%d))", cond.Month, cond.Month, cond.Day))
+	}
 	sorting := ""
 	if order != nil {
 		if order.GroupBy != nil {

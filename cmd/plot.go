@@ -31,7 +31,8 @@ func plotCmd(types []string) *cobra.Command {
 				return err
 			}
 			defer db.Close()
-			years, err := queryYears(&db)
+			cond := storage.Conditions{Types: types}
+			years, err := queryYears(&db, cond)
 			if err != nil {
 				return err
 			}
@@ -46,7 +47,7 @@ func plotCmd(types []string) *cobra.Command {
 			o := []string{"year", "month", "day"}
 			rows, err := db.Query(
 				[]string{"year", "month", "day", "sum(" + measurement + ")"},
-				storage.Conditions{Types: types}, &storage.Order{GroupBy: o, OrderBy: o},
+				cond, &storage.Order{GroupBy: o, OrderBy: o},
 			)
 			if err != nil {
 				return fmt.Errorf("select caused: %w", err)
