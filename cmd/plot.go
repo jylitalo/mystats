@@ -43,10 +43,10 @@ func plotCmd(types []string) *cobra.Command {
 				ys[year] = []float64{}
 				totals[year] = 0
 			}
+			o := []string{"year", "month", "day"}
 			rows, err := db.Query(
 				[]string{"year", "month", "day", "sum(" + measurement + ")"},
-				storage.Conditions{Types: types},
-				&storage.Order{Fields: []string{"year", "month", "day"}, Ascend: true},
+				storage.Conditions{Types: types}, &storage.Order{GroupBy: o, OrderBy: o},
 			)
 			if err != nil {
 				return fmt.Errorf("select caused: %w", err)

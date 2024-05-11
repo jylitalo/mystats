@@ -12,12 +12,15 @@ func TestSqlQuery(t *testing.T) {
 	}{
 		{"simple", []string{"field"}, Conditions{Types: []string{"Run"}}, nil, "select field from mystats where (type='Run')"},
 		{
-			"multi-field", []string{"f1", "f2"}, Conditions{Types: []string{"r1", "r2"}}, &Order{Fields: []string{"f3"}},
+			"multi-field", []string{"f1", "f2"},
+			Conditions{Types: []string{"r1", "r2"}},
+			&Order{GroupBy: []string{"f3"}, OrderBy: []string{"f3 desc"}},
 			"select f1,f2 from mystats where (type='r1' or type='r2') group by f3 order by f3 desc",
 		},
 		{
-			"order", []string{"k1", "k2"}, Conditions{Types: []string{"c1"}, Workouts: []string{"c3"}}, &Order{Fields: []string{"k3", "k4"}, Ascend: true},
-			"select k1,k2 from mystats where (workouttype='c3') and (type='c1') group by k3,k4 order by k3,k4",
+			"order", []string{"k1", "k2"}, Conditions{Types: []string{"c1"}, Workouts: []string{"c3"}},
+			&Order{GroupBy: []string{"k3", "k4"}, OrderBy: []string{"k5", "k6"}, Limit: 7},
+			"select k1,k2 from mystats where (workouttype='c3') and (type='c1') group by k3,k4 order by k5,k6 limit 7",
 		},
 	}
 	for _, value := range values {

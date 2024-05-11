@@ -25,10 +25,10 @@ func listCmd(types []string) *cobra.Command {
 				return err
 			}
 			defer db.Close()
+			o := []string{"year", "month", "day"}
 			rows, err := db.Query(
 				[]string{"year", "month", "day", "name", "distance", "elevation", "movingtime"},
-				storage.Conditions{Workouts: workouts, Types: types},
-				&storage.Order{Fields: []string{"year", "month", "day"}, Ascend: true},
+				storage.Conditions{Workouts: workouts, Types: types}, &storage.Order{GroupBy: o, OrderBy: o},
 			)
 			if err != nil {
 				return fmt.Errorf("query caused: %w", err)

@@ -18,7 +18,7 @@ func queryYears(db *storage.Sqlite3) ([]int, error) {
 	rows, err := db.Query(
 		[]string{"distinct(year)"},
 		storage.Conditions{Types: []string{"Run"}},
-		&storage.Order{Fields: []string{"year"}, Ascend: false},
+		&storage.Order{GroupBy: []string{"year"}, OrderBy: []string{"year desc"}},
 	)
 	if err != nil {
 		return years, fmt.Errorf("select caused: %w", err)
@@ -109,7 +109,7 @@ func statsCmd(types []string) *cobra.Command {
 			rows, err := db.Query(
 				[]string{"year", period, measurement},
 				storage.Conditions{Types: types},
-				&storage.Order{Fields: []string{period, "year"}, Ascend: true},
+				&storage.Order{GroupBy: []string{period, "year"}, OrderBy: []string{period, "year"}},
 			)
 			if err != nil {
 				return fmt.Errorf("select caused: %w", err)

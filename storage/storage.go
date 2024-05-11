@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -30,8 +31,9 @@ type Conditions struct {
 }
 
 type Order struct {
-	Fields []string
-	Ascend bool
+	GroupBy []string
+	OrderBy []string
+	Limit   int
 }
 
 type Sqlite3 struct {
@@ -110,10 +112,14 @@ func sqlQuery(fields []string, cond Conditions, order *Order) string {
 
 	sorting := ""
 	if order != nil {
-		s := strings.Join(order.Fields, ",")
-		sorting = " group by " + s + " order by " + s
-		if !order.Ascend {
-			sorting += " desc"
+		if order.GroupBy != nil {
+			sorting += " group by " + strings.Join(order.GroupBy, ",")
+		}
+		if order.OrderBy != nil {
+			sorting += " order by " + strings.Join(order.OrderBy, ",")
+		}
+		if order.Limit > 0 {
+			sorting += " limit " + strconv.FormatInt(int64(order.Limit), 10)
 		}
 	}
 	return fmt.Sprintf("select %s from mystats where %s%s", strings.Join(fields, ","), strings.Join(where, " and "), sorting)
