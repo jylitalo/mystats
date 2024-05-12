@@ -150,7 +150,7 @@ func statsCmd(types []string) *cobra.Command {
 	cmd.Flags().String("measure", "sum(distance)", "measurement type (sum(distance), max(elevation), ...)")
 	cmd.Flags().String("period", "week", "time period (week, month)")
 	cmd.Flags().StringSlice("type", types, "sport types (run, trail run, ...)")
-	cmd.Flags().Int("month", 0, "only search number of months")
-	cmd.Flags().Int("day", 0, "only search number of days from last --month")
+	cmd.Flags().Int("month", 12, "only search number of months")
+	cmd.Flags().Int("day", 31, "only search number of days from last --month")
 	return cmd
 }

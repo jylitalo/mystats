@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"log"
+	"log/slog"
 	"strconv"
 	"time"
 
@@ -25,13 +26,15 @@ func plotCmd(types []string) *cobra.Command {
 			measurement, _ := flags.GetString("measure")
 			output, _ := flags.GetString("output")
 			types, _ := flags.GetStringSlice("type")
+			month, _ := flags.GetInt("month")
+			day, _ := flags.GetInt("day")
 			tz, _ := time.LoadLocation("Europe/Helsinki")
 			db := storage.Sqlite3{}
 			if err := db.Open(); err != nil {
 				return err
 			}
 			defer db.Close()
-			cond := storage.Conditions{Types: types}
+			cond := storage.Conditions{Types: types, Month: month, Day: day}
 			years, err := queryYears(&db, cond)
 			if err != nil {
 				return err
@@ -53,6 +56,7 @@ func plotCmd(types []string) *cobra.Command {
 				return fmt.Errorf("select caused: %w", err)
 			}
 			defer rows.Close()
+			var xmax float64
 			for rows.Next() {
 				var year, month, day int
 				var value float64
@@ -67,15 +71,16 @@ func plotCmd(types []string) *cobra.Command {
 				day1 := time.Date(year, time.January, 1, 6, 0, 0, 0, tz)
 				now := time.Date(year, time.Month(month), day, 6, 0, 0, 0, tz)
 				days := now.Sub(day1).Hours() / 24
+				xmax = max(xmax, days)
 				xs[year] = append(xs[year], days)
 				ys[year] = append(ys[year], totals[year])
 			}
 			p := plot.New()
-			p.Title.Text = "year to day"
+			p.Title.Text = fmt.Sprintf("year to day (month=%d, day=%d)", month, day)
 			p.X.Label.Text = "days"
 			p.Y.Label.Text = "distance"
 			p.X.Min = 0
-			p.X.Max = 365
+			p.X.Max = xmax
 			p.Y.Min = 0
 			yearLines := []interface{}{}
 			for _, year := range years {
@@ -89,11 +94,14 @@ func plotCmd(types []string) *cobra.Command {
 			if err != nil {
 				log.Fatal("failed to save image")
 			}
+			slog.Info("Plat created", "output", output)
 			return nil
 		},
 	}
 	cmd.Flags().String("output", "ytd.png", "output file")
 	cmd.Flags().String("measure", "distance", "measurement type (distance, elevation, ...)")
 	cmd.Flags().StringSlice("type", types, "sport types (run, trail run, ...)")
+	cmd.Flags().Int("month", 12, "only search number of months")
+	cmd.Flags().Int("day", 31, "only search number of days from last --month")
 	return cmd
 }
