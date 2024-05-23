@@ -141,6 +141,27 @@ func (sq *Sqlite3) Query(fields []string, cond Conditions, order *Order) (*sql.R
 	return rows, err
 }
 
+// QueryYears creates list of distinct years from which have records
+func (sq *Sqlite3) QueryYears(cond Conditions) ([]int, error) {
+	years := []int{}
+	rows, err := sq.Query(
+		[]string{"distinct(year)"}, cond,
+		&Order{GroupBy: []string{"year"}, OrderBy: []string{"year desc"}},
+	)
+	if err != nil {
+		return years, fmt.Errorf("select caused: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var year int
+		if err = rows.Scan(&year); err != nil {
+			return years, err
+		}
+		years = append(years, year)
+	}
+	return years, nil
+}
+
 func (sq *Sqlite3) Close() {
 	if sq.db != nil {
 		sq.db.Close()

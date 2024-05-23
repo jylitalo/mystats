@@ -1,0 +1,25 @@
+button {
+    align-items: center;
+    background-color: var(--button-primary-bgColor-rest,var(--color-btn-primary-bg,#238636));
+    border-radius: 6px;
+    border-width: 1px;
+    border-style: solid;
+    border-image: initial;
+    border-color: var(--button-primary-borderColor-rest,var(--color-btn-primary-border,rgba(240,246,252,0.1)));
+    box-shadow: var(--shadow-resting-small,var(--color-btn-primary-shadow,0 0 transparent));
+    color: var(--button-primary-fgColor-rest,var(--color-btn-primary-text,#ffffff));
+    cursor: pointer;
+    display: flex;
+    font-family: inherit;
+    font-weight: 500;
+    font-size: 14px;
+    gap: 8px;
+    height: 32px;
+    justify-content: space-between;
+    min-width: max-content;
+    padding: 0px 12px;
+    text-align: center;
+    text-decoration: none;
+    transition: color 80ms cubic-bezier(0.65, 0, 0.35, 1) 0s, fill, background-color, border-color;
+    user-select: none;
+}
