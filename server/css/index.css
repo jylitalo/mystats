@@ -1,13 +1,13 @@
 button {
     align-items: center;
-    background-color: var(--button-primary-bgColor-rest,var(--color-btn-primary-bg,#238636));
+    background-color: #238636;
     border-radius: 6px;
     border-width: 1px;
     border-style: solid;
     border-image: initial;
-    border-color: var(--button-primary-borderColor-rest,var(--color-btn-primary-border,rgba(240,246,252,0.1)));
+    border-color: rgba(240,246,252,0.1);
     box-shadow: var(--shadow-resting-small,var(--color-btn-primary-shadow,0 0 transparent));
-    color: var(--button-primary-fgColor-rest,var(--color-btn-primary-text,#ffffff));
+    color: #ffffff;
     cursor: pointer;
     display: flex;
     font-family: inherit;
@@ -22,4 +22,45 @@ button {
     text-decoration: none;
     transition: color 80ms cubic-bezier(0.65, 0, 0.35, 1) 0s, fill, background-color, border-color;
     user-select: none;
+}
+
+table {
+    border-collapse: collapse;
+    margin: 25px 0;
+    font-size: 0.9em;
+    font-family: sans-serif;
+    min-width: 400px;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.15);
+}
+
+table thead tr {
+    background-color: #238636;
+    color: #ffffff;
+    text-align: left;
+}
+
+table th,
+table td {
+    padding: 12px 15px;
+}
+
+table td {
+    text-align: right;
+}
+
+table tbody tr {
+    border-bottom: 1px solid #dddddd;
+}
+
+table tbody tr:nth-of-type(even) {
+    background-color: #f3f3f3;
+}
+
+table tbody tr:last-of-type {
+    border-bottom: 2px solid #238636;
+}
+
+table tbody tr.active-row {
+    font-weight: bold;
+    color: #009879;
 }

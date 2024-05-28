@@ -33,9 +33,20 @@
 
 {{ block "form" . }}
 <form hx-swap="outerHTML" hx-target="#data" hx-post="/plot">
-    month: <input value="{{ .Month }}" type="text" name="month" />
-    day: <input value="{{ .Day }}" type="text" name="day" />
-    <button type="submit">Plot graphs</button>
+    month: 
+        <select hx-swap="outerHTML" hx-target="#data" hx-post="/plot" name="EndMonth">
+            {{ $endMonth := .EndMonth}}
+            {{ range $m := N 1 13 }}
+                <option value="{{ $m }}"{{ if eq $m $endMonth }}  SELECTED{{ end }}>{{ month $m }}</option>
+            {{ end }}
+        </select>
+    day: 
+        <select hx-swap="outerHTML" hx-target="#data" hx-post="/plot" name="EndDay">
+            {{ $endDay := .EndDay}}
+            {{ range $d := N 1 32 }}
+                <option value="{{ $d }}"{{ if eq $d $endDay }}  SELECTED{{ end }}>{{ $d }}</option>
+            {{ end }}
+        </select>
 </form>
 {{ end }}
 
@@ -56,29 +67,33 @@
 {{ end }}
 
 {{ block "stats" . }}
-<table border="1">
-    <tr>
-        <th>{{ .Measurement }}</th>
-        {{ range $s := .Years }}
-        <th>{{ $s }}</th>
-        {{ end }}
-    </tr>
-    {{ range $month, $line := .Stats }}
-        {{ $trimmed := joined $line }}
-        {{ if ne $trimmed "" }}
+<table>
+    <thead>
         <tr>
-            <td>{{ month $month }}</td>
-            {{ range $col := $line }}
-            <td>{{ $col }}</td>
+          <th>{{ .Measurement }}</th>
+          {{ range $s := .Years }}
+          <th>{{ $s }}</th>
+          {{ end }}
+      </tr>
+    </thead>
+    <tbody>
+        {{ range $month, $line := .Stats }}
+            {{ $trimmed := joined $line }}
+            {{ if ne $trimmed "" }}
+            <tr>
+                <th>{{ $m := inc $month }}{{ month $m }}</th>
+                {{ range $col := $line }}
+                    <td>{{ $col }}</td>
+                {{ end }}
+            </tr>
+            {{ end }}
+        {{ end }}
+        <tr>
+            <th>Total</th>
+            {{ range $total := .Totals }}
+                <th>{{ $total }}</th>
             {{ end }}
         </tr>
-        {{ end }}
-    {{ end }}
-    <tr>
-        <th>Total</th>
-        {{ range $total := .Totals }}
-        <th>{{ $total }}</th>
-        {{ end }}
-    </tr>
+    </tbody>
 </table>
 {{ end }}
