@@ -31,6 +31,16 @@ type Data struct {
 	Stats       [][]string
 	Totals      []string
 	Filename    string
+	plot        func(db plot.Storage, types []string, measurement string, month, day int, years []int, filename string) error
+	stats       func(db stats.Storage, measurement, period string, types []string, month, day int, years []int) ([]int, [][]string, []string, error)
+}
+
+func newData() Data {
+	return Data{
+		Measurement: "sum(distance)",
+		plot:        plot.Plot,
+		stats:       stats.Stats,
+	}
 }
 
 type FormData struct {
@@ -55,7 +65,7 @@ type Page struct {
 
 func newPage() *Page {
 	return &Page{
-		Data: Data{Measurement: "sum(distance)"},
+		Data: newData(),
 		Form: newFormData(),
 	}
 }
@@ -64,7 +74,7 @@ type Template struct {
 	tmpl *template.Template
 }
 
-func newTemplate() *Template {
+func newTemplate(path string) *Template {
 	funcMap := template.FuncMap{
 		"N": func(start, end int) (stream chan int) {
 			stream = make(chan int)
@@ -90,7 +100,7 @@ func newTemplate() *Template {
 		},
 	}
 	return &Template{
-		tmpl: template.Must(template.New("plot").Funcs(funcMap).ParseGlob("server/views/*.html")),
+		tmpl: template.Must(template.New("plot").Funcs(funcMap).ParseGlob(path)),
 	}
 }
 
@@ -98,34 +108,34 @@ func (t *Template) Render(w io.Writer, name string, data interface{}, c echo.Con
 	return t.tmpl.ExecuteTemplate(w, name, data)
 }
 
-func render(db Storage, page Page, types []string, month, day int, years map[int]bool) (*Page, error) {
-	page.Form.EndMonth = month
-	page.Form.EndDay = day
-	page.Form.Years = years
-	page.Data.Filename = "cache/plot-" + uuid.NewString() + ".png"
+func (p *Page) render(db Storage, types []string, month, day int, years map[int]bool) error {
+	p.Form.EndMonth = month
+	p.Form.EndDay = day
+	p.Form.Years = years
 	checked := []int{}
 	for k, v := range years {
 		if v {
 			checked = append(checked, k)
 		}
 	}
-	err := plot.Plot(db, types, "distance", month, day, checked, "server/"+page.Data.Filename)
+	d := &p.Data
+	d.Filename = "cache/plot-" + uuid.NewString() + ".png"
+	err := d.plot(db, types, "distance", month, day, checked, "server/"+d.Filename)
 	if err != nil {
 		slog.Error("failed to plot", "err", err)
-		return nil, err
+		return err
 	}
-	page.Data.Years, page.Data.Stats, page.Data.Totals, err = stats.Stats(db, page.Data.Measurement, "month", types, month, day, checked)
+	d.Years, d.Stats, d.Totals, err = d.stats(db, d.Measurement, "month", types, month, day, checked)
 	if err != nil {
 		slog.Error("failed to calculate stats", "err", err)
-		return nil, err
 	}
-	return &page, nil
+	return err
 }
 
 func Start(db Storage, types []string, port int) error {
 	var err error
 	e := echo.New()
-	e.Renderer = newTemplate()
+	e.Renderer = newTemplate("server/views/*.html")
 	e.Use(middleware.Logger())
 	e.Static("/cache", "server/cache")
 	e.Static("/css", "server/css")
@@ -142,11 +152,9 @@ func Start(db Storage, types []string, port int) error {
 	slog.Info("starting things", "page", page)
 
 	e.GET("/", func(c echo.Context) error {
-		respPage, err := render(db, *page, types, page.Form.EndMonth, page.Form.EndDay, page.Form.Years)
-		if err != nil {
+		if err := page.render(db, types, page.Form.EndMonth, page.Form.EndDay, page.Form.Years); err != nil {
 			log.Fatal(err)
 		}
-		page = respPage
 		// slog.Info("GET /", "page", page)
 		if err = c.Render(200, "index", page); err != nil {
 			log.Fatal(err)
@@ -172,11 +180,9 @@ func Start(db Storage, types []string, port int) error {
 				years[y] = (len(v) > 0 && v[0] == "on")
 			}
 		}
-		respPage, err := render(db, *page, types, month, day, years)
-		if err != nil {
+		if err := page.render(db, types, month, day, years); err != nil {
 			return err
 		}
-		page = respPage
 		// slog.Info("POST /plot", "page", page)
 		return c.Render(200, "data", page.Data)
 	})
