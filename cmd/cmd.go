@@ -14,6 +14,10 @@ func Execute() error {
 	if cfg, err := config.Get(false); err == nil {
 		types = cfg.Default.Types
 	}
-	rootCmd.AddCommand(configureCmd(), fetchCmd(), makeCmd(), listCmd(types), plotCmd(types), statsCmd(types), topCmd(types))
+	rootCmd.AddCommand(
+		configureCmd(), fetchCmd(), makeCmd(),
+		listCmd(types), plotCmd(types), statsCmd(types), topCmd(types),
+		serverCmd(types),
+	)
 	return rootCmd.Execute()
 }

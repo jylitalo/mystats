@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"path/filepath"
 	"time"
 )
 
@@ -18,7 +19,7 @@ type Config struct {
 	ExpiresAt    int64  `yaml:"expiresAt" json:"expires_at"`
 }
 
-const tokenURL string = "https://www.strava.com/oauth/token"
+const tokenURL string = "https://www.strava.com/oauth/token" // #nosec G101
 
 func (cfg *Config) AuthorizationCode(code string) (*Config, error) {
 	url := fmt.Sprintf(
@@ -86,7 +87,7 @@ func ReadJSONs(fnames []string) ([]ActivitySummary, error) {
 	ids := map[int64]string{}
 	activities := []ActivitySummary{}
 	for _, fname := range fnames {
-		body, err := os.ReadFile(fname)
+		body, err := os.ReadFile(filepath.Clean(fname))
 		if err != nil {
 			return activities, err
 		}

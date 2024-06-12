@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"gopkg.in/yaml.v2"
 
@@ -29,7 +30,7 @@ func Get(refresh bool) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	body, err := os.ReadFile(fname)
+	body, err := os.ReadFile(filepath.Clean(fname))
 	if err != nil {
 		return nil, fmt.Errorf("error in reading .mystats.yaml")
 	}

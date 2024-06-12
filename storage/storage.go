@@ -28,6 +28,7 @@ type Record struct {
 type Conditions struct {
 	Types    []string
 	Workouts []string
+	Years    []int
 	Month    int
 	Day      int
 }
@@ -114,6 +115,17 @@ func sqlQuery(fields []string, cond Conditions, order *Order) string {
 	if cond.Month > 0 && cond.Day > 0 {
 		where = append(where, fmt.Sprintf("(month < %d or (month=%d and day<=%d))", cond.Month, cond.Month, cond.Day))
 	}
+	if len(cond.Years) > 0 {
+		yearStr := []string{}
+		for _, y := range cond.Years {
+			yearStr = append(yearStr, strconv.Itoa(y))
+		}
+		where = append(where, "(year="+strings.Join(yearStr, " or year=")+")")
+	}
+	condition := ""
+	if len(where) > 0 {
+		condition = " where " + strings.Join(where, " and ")
+	}
 	sorting := ""
 	if order != nil {
 		if order.GroupBy != nil {
@@ -126,7 +138,7 @@ func sqlQuery(fields []string, cond Conditions, order *Order) string {
 			sorting += " limit " + strconv.FormatInt(int64(order.Limit), 10)
 		}
 	}
-	return fmt.Sprintf("select %s from mystats where %s%s", strings.Join(fields, ","), strings.Join(where, " and "), sorting)
+	return fmt.Sprintf("select %s from mystats%s%s", strings.Join(fields, ","), condition, sorting)
 }
 
 func (sq *Sqlite3) Query(fields []string, cond Conditions, order *Order) (*sql.Rows, error) {
@@ -141,8 +153,30 @@ func (sq *Sqlite3) Query(fields []string, cond Conditions, order *Order) (*sql.R
 	return rows, err
 }
 
-func (sq *Sqlite3) Close() {
-	if sq.db != nil {
-		sq.db.Close()
+// QueryYears creates list of distinct years from which have records
+func (sq *Sqlite3) QueryYears(cond Conditions) ([]int, error) {
+	years := []int{}
+	rows, err := sq.Query(
+		[]string{"distinct(year)"}, cond,
+		&Order{GroupBy: []string{"year"}, OrderBy: []string{"year desc"}},
+	)
+	if err != nil {
+		return years, fmt.Errorf("select caused: %w", err)
 	}
+	defer rows.Close()
+	for rows.Next() {
+		var year int
+		if err = rows.Scan(&year); err != nil {
+			return years, err
+		}
+		years = append(years, year)
+	}
+	return years, nil
+}
+
+func (sq *Sqlite3) Close() error {
+	if sq.db != nil {
+		return sq.db.Close()
+	}
+	return nil
 }

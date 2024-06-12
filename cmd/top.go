@@ -29,7 +29,7 @@ func printTopTable(period, measurement string, results [][]string) {
 	table.Render()
 }
 
-// statsCmd turns sqlite db into table or csv by week/month/...
+// topCmd turns sqlite db into table or csv by week/month/...
 func topCmd(types []string) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "top",

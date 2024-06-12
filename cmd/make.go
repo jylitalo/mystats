@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"path/filepath"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -43,11 +44,10 @@ func makeCmd() *cobra.Command {
 				})
 			}
 			db := storage.Sqlite3{}
-			db.Remove()
-			if err = db.Open(); err != nil {
-				return err
-			}
-			if err := db.Create(); err != nil {
+			errR := db.Remove()
+			errO := db.Open()
+			errC := db.Create()
+			if err = errors.Join(errR, errO, errC); err != nil {
 				return err
 			}
 			defer db.Close()

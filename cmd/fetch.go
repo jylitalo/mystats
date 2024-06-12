@@ -27,7 +27,7 @@ func fetchCmd() *cobra.Command {
 				return err
 			case len(fnames) == 0:
 				if _, err = os.Stat("pages"); os.IsNotExist(err) {
-					if err = os.Mkdir("pages", 0755); err != nil {
+					if err = os.Mkdir("pages", 0750); err != nil {
 						return err
 					}
 				}
@@ -69,7 +69,9 @@ func fetchCmd() *cobra.Command {
 					return err
 				}
 				fmt.Printf("%d => pages/page%d.json ...\n", page, page+offset)
-				os.WriteFile(fmt.Sprintf("pages/page%d.json", page+offset), j, 0644)
+				if err = os.WriteFile(fmt.Sprintf("pages/page%d.json", page+offset), j, 0600); err != nil {
+					return err
+				}
 				stay = (len(activities) == 30)
 			}
 			return nil

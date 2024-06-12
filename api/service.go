@@ -35,7 +35,9 @@ var defaultErrorHandler ErrorHandler = func(resp *http.Response) error {
 	if resp.StatusCode/100 == 4 {
 		var response strava.Error
 		contents, _ := io.ReadAll(resp.Body)
-		json.Unmarshal(contents, &response)
+		if err := json.Unmarshal(contents, &response); err != nil {
+			return err
+		}
 
 		return response
 	}

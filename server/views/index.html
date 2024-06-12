@@ -1,0 +1,109 @@
+{{ block "index" . }}
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <title>MyStats</title>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <link media="all" rel="stylesheet" href="/css/index.css" />
+        <script src="https://unpkg.com/htmx.org/dist/htmx.min.js"></script>
+    </head>
+    <body>
+        {{ template "form" .Form }}
+        <hr />
+        {{ template "data" .Data }}
+        <script>
+        document.addEventListener("DOMContentLoaded", (event) => {
+            document.body.addEventListener('htmx:beforeSwap', function(evt) {
+                if (evt.detail.xhr.status === 422) {
+                    // allow 422 responses to swap as we are using this as a signal that
+                    // a form was submitted with bad data and want to rerender with the
+                    // errors
+                    //
+                    // set isError to false to avoid error logging in console
+                    evt.detail.shouldSwap = true;
+                    evt.detail.isError = false;
+                }
+            });
+        })
+        </script>
+    </body>
+</html>
+{{ end }}
+
+{{ block "form" . }}
+<form hx-swap="outerHTML" hx-target="#data" hx-post="/plot">
+    <div id="month">
+        Month:
+        <select hx-swap="outerHTML" hx-target="#data" hx-post="/plot" name="EndMonth">
+            {{ $endMonth := .EndMonth}}
+            {{ range $m := N 1 13 }}
+                <option value="{{ $m }}"{{ if eq $m $endMonth }}  SELECTED{{ end }}>{{ month $m }}</option>
+            {{ end }}
+        </select>
+    </div>
+    <div id="day">
+        Day:
+        <select hx-swap="outerHTML" hx-target="#data" hx-post="/plot" name="EndDay">
+            {{ $endDay := .EndDay}}
+            {{ range $d := N 1 32 }}
+                <option value="{{ $d }}"{{ if eq $d $endDay }}  selected{{ end }}>{{ $d }}</option>
+            {{ end }}
+        </select>
+    </div>
+    <div id="years">
+        Years:
+        {{ range $y, $v := .Years }}
+            <input type="checkbox" name="year_{{ $y }}"{{ if $v }} checked{{ end }} hx-swap="outerHTML" hx-target="#data" hx-post="/plot"><label>{{ $y }}</label>
+        {{ end }}
+    </div>
+</form>
+{{ end }}
+
+{{ block "data" . }}
+<div id="data">
+    {{ template "plot" . }}
+    <hr />
+    {{ template "stats" . }}
+</div>
+{{ end }}
+
+{{ block "plot" . }}
+<div id="plot" style="display: flex; flex-direction: column">
+    {{ if .Filename -}}
+    <img src="{{ .Filename }}" alt="" />
+    {{ end -}}
+</div>
+{{ end }}
+
+{{ block "stats" . }}
+<table>
+    <thead>
+        <tr>
+          <th>{{ .Measurement }}</th>
+          {{ range $s := .Years }}
+          <th>{{ $s }}</th>
+          {{ end }}
+      </tr>
+    </thead>
+    <tbody>
+        {{ range $month, $line := .Stats }}
+            {{ $trimmed := joined $line }}
+            {{ if ne $trimmed "" }}
+            <tr>
+                <th>{{ $m := inc $month }}{{ month $m }}</th>
+                {{ range $col := $line }}
+                    <td>{{ $col }}</td>
+                {{ end }}
+            </tr>
+            {{ end }}
+        {{ end }}
+        <tr>
+            <th>Total</th>
+            {{ range $total := .Totals }}
+                <th>{{ $total }}</th>
+            {{ end }}
+        </tr>
+    </tbody>
+</table>
+{{ end }}
