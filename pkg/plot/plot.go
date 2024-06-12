@@ -1,6 +1,7 @@
 package plot
 
 import (
+	"database/sql"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -14,14 +15,14 @@ import (
 	"gonum.org/v1/plot/vg"
 )
 
-func Plot(types []string, measurement string, month, day int, filename string) error {
+type Storage interface {
+	Query(fields []string, cond storage.Conditions, order *storage.Order) (*sql.Rows, error)
+	QueryYears(cond storage.Conditions) ([]int, error)
+}
+
+func Plot(db Storage, types []string, measurement string, month, day int, years []int, filename string) error {
 	tz, _ := time.LoadLocation("Europe/Helsinki")
-	db := storage.Sqlite3{}
-	if err := db.Open(); err != nil {
-		return err
-	}
-	defer db.Close()
-	cond := storage.Conditions{Types: types, Month: month, Day: day}
+	cond := storage.Conditions{Types: types, Month: month, Day: day, Years: years}
 	years, err := db.QueryYears(cond)
 	if err != nil {
 		return err

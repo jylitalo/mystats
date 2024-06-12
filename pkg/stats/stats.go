@@ -1,13 +1,19 @@
 package stats
 
 import (
+	"database/sql"
 	"fmt"
 	"strings"
 
 	"github.com/jylitalo/mystats/storage"
 )
 
-func Stats(measurement, period string, types []string, month, day int) ([]int, [][]string, []string, error) {
+type Storage interface {
+	Query(fields []string, cond storage.Conditions, order *storage.Order) (*sql.Rows, error)
+	QueryYears(cond storage.Conditions) ([]int, error)
+}
+
+func Stats(db Storage, measurement, period string, types []string, month, day int, years []int) ([]int, [][]string, []string, error) {
 	inYear := map[string]int{
 		"month": 12,
 		"week":  53,
@@ -15,13 +21,8 @@ func Stats(measurement, period string, types []string, month, day int) ([]int, [
 	if _, ok := inYear[period]; !ok {
 		return nil, nil, nil, fmt.Errorf("unknown period: %s", period)
 	}
-	cond := storage.Conditions{Types: types, Month: month, Day: day}
+	cond := storage.Conditions{Types: types, Month: month, Day: day, Years: years}
 	results := make([][]string, inYear[period])
-	db := storage.Sqlite3{}
-	if err := db.Open(); err != nil {
-		return nil, nil, nil, err
-	}
-	defer db.Close()
 	years, err := db.QueryYears(cond)
 	if err != nil {
 		return nil, nil, nil, err

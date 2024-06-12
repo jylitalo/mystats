@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/jylitalo/mystats/pkg/stats"
+	"github.com/jylitalo/mystats/storage"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/olekukonko/tablewriter"
 	"github.com/spf13/cobra"
@@ -74,7 +75,12 @@ func statsCmd(types []string) *cobra.Command {
 			if _, ok := formatFn[format]; !ok {
 				return fmt.Errorf("unknown format: %s", format)
 			}
-			years, results, totals, err := stats.Stats(measurement, period, types, month, day)
+			db := storage.Sqlite3{}
+			if err := db.Open(); err != nil {
+				return err
+			}
+			defer db.Close()
+			years, results, totals, err := stats.Stats(&db, measurement, period, types, month, day, nil)
 			if err != nil {
 				return err
 			}

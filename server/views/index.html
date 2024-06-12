@@ -33,20 +33,30 @@
 
 {{ block "form" . }}
 <form hx-swap="outerHTML" hx-target="#data" hx-post="/plot">
-    month: 
+    <div id="month">
+        Month:
         <select hx-swap="outerHTML" hx-target="#data" hx-post="/plot" name="EndMonth">
             {{ $endMonth := .EndMonth}}
             {{ range $m := N 1 13 }}
                 <option value="{{ $m }}"{{ if eq $m $endMonth }}  SELECTED{{ end }}>{{ month $m }}</option>
             {{ end }}
         </select>
-    day: 
+    </div>
+    <div id="day">
+        Day:
         <select hx-swap="outerHTML" hx-target="#data" hx-post="/plot" name="EndDay">
             {{ $endDay := .EndDay}}
             {{ range $d := N 1 32 }}
-                <option value="{{ $d }}"{{ if eq $d $endDay }}  SELECTED{{ end }}>{{ $d }}</option>
+                <option value="{{ $d }}"{{ if eq $d $endDay }}  selected{{ end }}>{{ $d }}</option>
             {{ end }}
         </select>
+    </div>
+    <div id="years">
+        Years:
+        {{ range $y, $v := .Years }}
+            <input type="checkbox" name="year_{{ $y }}"{{ if $v }} checked{{ end }} hx-swap="outerHTML" hx-target="#data" hx-post="/plot"><label>{{ $y }}</label>
+        {{ end }}
+    </div>
 </form>
 {{ end }}
 

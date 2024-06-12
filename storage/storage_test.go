@@ -10,6 +10,7 @@ func TestSqlQuery(t *testing.T) {
 		order  *Order
 		query  string
 	}{
+		{"none", []string{"field"}, Conditions{}, nil, "select field from mystats"},
 		{"simple", []string{"field"}, Conditions{Types: []string{"Run"}}, nil, "select field from mystats where (type='Run')"},
 		{
 			"multi-field", []string{"f1", "f2"},
@@ -22,6 +23,8 @@ func TestSqlQuery(t *testing.T) {
 			&Order{GroupBy: []string{"k3", "k4"}, OrderBy: []string{"k5", "k6"}, Limit: 7},
 			"select k1,k2 from mystats where (workouttype='c3') and (type='c1') group by k3,k4 order by k5,k6 limit 7",
 		},
+		{"one_year", []string{"field"}, Conditions{Types: []string{"Run"}, Years: []int{2023}}, nil, "select field from mystats where (type='Run') and (year=2023)"},
+		{"multiple_years", []string{"field"}, Conditions{Types: []string{"Run"}, Years: []int{2019, 2023}}, nil, "select field from mystats where (type='Run') and (year=2019 or year=2023)"},
 	}
 	for _, value := range values {
 		t.Run(value.name, func(t *testing.T) {

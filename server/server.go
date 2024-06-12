@@ -1,6 +1,7 @@
 package server
 
 import (
+	"database/sql"
 	"errors"
 	"html/template"
 	"io"
@@ -16,7 +17,13 @@ import (
 
 	"github.com/jylitalo/mystats/pkg/plot"
 	"github.com/jylitalo/mystats/pkg/stats"
+	"github.com/jylitalo/mystats/storage"
 )
+
+type Storage interface {
+	Query(fields []string, cond storage.Conditions, order *storage.Order) (*sql.Rows, error)
+	QueryYears(cond storage.Conditions) ([]int, error)
+}
 
 type Data struct {
 	Years       []int
@@ -29,6 +36,7 @@ type Data struct {
 type FormData struct {
 	EndMonth int
 	EndDay   int
+	Years    map[int]bool
 }
 
 func newFormData() FormData {
@@ -36,6 +44,7 @@ func newFormData() FormData {
 	return FormData{
 		EndMonth: int(t.Month()),
 		EndDay:   t.Day(),
+		Years:    map[int]bool{},
 	}
 }
 
@@ -89,16 +98,23 @@ func (t *Template) Render(w io.Writer, name string, data interface{}, c echo.Con
 	return t.tmpl.ExecuteTemplate(w, name, data)
 }
 
-func render(page Page, types []string, month, day int) (*Page, error) {
+func render(db Storage, page Page, types []string, month, day int, years map[int]bool) (*Page, error) {
 	page.Form.EndMonth = month
 	page.Form.EndDay = day
+	page.Form.Years = years
 	page.Data.Filename = "cache/plot-" + uuid.NewString() + ".png"
-	err := plot.Plot(types, "distance", month, day, "server/"+page.Data.Filename)
+	checked := []int{}
+	for k, v := range years {
+		if v {
+			checked = append(checked, k)
+		}
+	}
+	err := plot.Plot(db, types, "distance", month, day, checked, "server/"+page.Data.Filename)
 	if err != nil {
 		slog.Error("failed to plot", "err", err)
 		return nil, err
 	}
-	page.Data.Years, page.Data.Stats, page.Data.Totals, err = stats.Stats(page.Data.Measurement, "month", types, month, day)
+	page.Data.Years, page.Data.Stats, page.Data.Totals, err = stats.Stats(db, page.Data.Measurement, "month", types, month, day, checked)
 	if err != nil {
 		slog.Error("failed to calculate stats", "err", err)
 		return nil, err
@@ -106,7 +122,8 @@ func render(page Page, types []string, month, day int) (*Page, error) {
 	return &page, nil
 }
 
-func Start(types []string, port int) {
+func Start(db Storage, types []string, port int) error {
+	var err error
 	e := echo.New()
 	e.Renderer = newTemplate()
 	e.Use(middleware.Logger())
@@ -115,10 +132,17 @@ func Start(types []string, port int) {
 
 	page := newPage()
 	page.Data.Measurement = "sum(distance)"
+	years, err := db.QueryYears(storage.Conditions{})
+	if err != nil {
+		return err
+	}
+	for _, y := range years {
+		page.Form.Years[y] = true
+	}
 	slog.Info("starting things", "page", page)
 
 	e.GET("/", func(c echo.Context) error {
-		respPage, err := render(*page, types, page.Form.EndMonth, page.Form.EndDay)
+		respPage, err := render(db, *page, types, page.Form.EndMonth, page.Form.EndDay, page.Form.Years)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -133,16 +157,29 @@ func Start(types []string, port int) {
 	e.POST("/plot", func(c echo.Context) error {
 		month, errM := strconv.Atoi(c.FormValue("EndMonth"))
 		day, errD := strconv.Atoi(c.FormValue("EndDay"))
-		if err := errors.Join(errM, errD); err != nil {
+		values, errV := c.FormParams()
+		if err := errors.Join(errM, errD, errV); err != nil {
 			log.Fatal(err)
 		}
-		respPage, err := render(*page, types, month, day)
+		slog.Info("POST", "values", values)
+		years := map[int]bool{}
+		for k, v := range values {
+			if strings.HasPrefix(k, "year_") {
+				y, err := strconv.Atoi(k[5:])
+				if err != nil {
+					return err
+				}
+				years[y] = (len(v) > 0 && v[0] == "on")
+			}
+		}
+		respPage, err := render(db, *page, types, month, day, years)
 		if err != nil {
 			return err
 		}
 		page = respPage
-		slog.Info("POST /plot", "page", page)
+		// slog.Info("POST /plot", "page", page)
 		return c.Render(200, "data", page.Data)
 	})
 	e.Logger.Fatal(e.Start(":" + strconv.FormatInt(int64(port), 10)))
+	return nil
 }
