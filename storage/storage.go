@@ -7,6 +7,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -47,6 +48,16 @@ const dbName string = "mystats.sql"
 
 func (sq *Sqlite3) Remove() error {
 	return os.Remove(dbName)
+}
+
+// LastModified returns error or it will tell when database was last modified
+func (sq *Sqlite3) LastModified() (time.Time, error) {
+	fi, err := os.Stat(dbName)
+	if err != nil {
+		epoch := time.Date(1970, time.January, 1, 0, 0, 0, 0, time.UTC)
+		return epoch, err
+	}
+	return fi.ModTime().UTC(), nil
 }
 
 func (sq *Sqlite3) Open() error {

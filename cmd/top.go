@@ -56,8 +56,8 @@ func topCmd(types []string) *cobra.Command {
 				return fmt.Errorf("unknown format: %s", format)
 			}
 			results := [][]string{}
-			db := storage.Sqlite3{}
-			if err := db.Open(); err != nil {
+			db, err := makeDB()
+			if err != nil {
 				return err
 			}
 			defer db.Close()

@@ -7,7 +7,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/jylitalo/mystats/pkg/plot"
-	"github.com/jylitalo/mystats/storage"
 )
 
 // plotCmd makes graphs from sqlite data
@@ -22,12 +21,12 @@ func plotCmd(types []string) *cobra.Command {
 			types, _ := flags.GetStringSlice("type")
 			month, _ := flags.GetInt("month")
 			day, _ := flags.GetInt("day")
-			db := storage.Sqlite3{}
-			if err := db.Open(); err != nil {
+			db, err := makeDB()
+			if err != nil {
 				return err
 			}
 			defer db.Close()
-			err := plot.Plot(&db, types, measurement, month, day, nil, output)
+			err = plot.Plot(db, types, measurement, month, day, nil, output)
 			if err != nil {
 				return err
 			}
