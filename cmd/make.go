@@ -3,6 +3,7 @@ package cmd
 import (
 	"database/sql"
 	"errors"
+	"log/slog"
 	"os"
 	"time"
 
@@ -25,7 +26,11 @@ func makeCmd() *cobra.Command {
 		Use:   "make",
 		Short: "Turn fetched JSON files into Sqlite database",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			_, err := makeDB()
+			db, err := makeDB()
+			if err != nil {
+				return err
+			}
+			defer db.Close()
 			return err
 		},
 	}
@@ -48,6 +53,7 @@ func skipDB(db *storage.Sqlite3, fnames []string) bool {
 }
 
 func makeDB() (Storage, error) {
+	slog.Info("Fetch activities from Strava")
 	if err := fetch(); err != nil {
 		return nil, err
 	}
@@ -57,8 +63,11 @@ func makeDB() (Storage, error) {
 	}
 	db := &storage.Sqlite3{}
 	if skipDB(db, fnames) {
+		slog.Info("Database is uptodate")
+		db.Open()
 		return db, nil
 	}
+	slog.Info("Making database")
 	activities, err := api.ReadJSONs(fnames)
 	if err != nil {
 		return nil, err
@@ -83,7 +92,6 @@ func makeDB() (Storage, error) {
 	}
 	errR := db.Remove()
 	errO := db.Open()
-	defer db.Close()
 	errC := db.Create()
 	errI := db.Insert(dbActivities)
 	return db, errors.Join(errR, errO, errC, errI)

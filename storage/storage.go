@@ -47,6 +47,9 @@ type Sqlite3 struct {
 const dbName string = "mystats.sql"
 
 func (sq *Sqlite3) Remove() error {
+	if _, err := os.Stat(dbName); err != nil && errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
 	return os.Remove(dbName)
 }
 

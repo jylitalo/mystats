@@ -55,12 +55,12 @@ func topCmd(types []string) *cobra.Command {
 			if _, ok := formatFn[format]; !ok {
 				return fmt.Errorf("unknown format: %s", format)
 			}
-			results := [][]string{}
 			db, err := makeDB()
 			if err != nil {
 				return err
 			}
 			defer db.Close()
+			results := [][]string{}
 			rows, err := db.Query(
 				[]string{measurement + " as total", "year", period},
 				storage.Conditions{Types: types},
