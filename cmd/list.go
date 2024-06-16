@@ -20,7 +20,6 @@ func listCmd(types []string) *cobra.Command {
 			flags := cmd.Flags()
 			types, _ := flags.GetStringSlice("type")
 			workouts, _ := flags.GetStringSlice("workout")
-			makeDB()
 			db, err := makeDB()
 			if err != nil {
 				return err

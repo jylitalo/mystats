@@ -7,9 +7,10 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/spf13/cobra"
+
 	"github.com/jylitalo/mystats/api"
 	"github.com/jylitalo/mystats/config"
-	"github.com/spf13/cobra"
 )
 
 // fetchCmd fetches activity data from Strava
