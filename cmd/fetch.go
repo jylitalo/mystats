@@ -17,65 +17,96 @@ import (
 func fetchCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "fetch",
-		Short: "Fetch activity data from Strava",
+		Short: "Fetch activity data from Strava to JSON files",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			epoch := time.Date(1970, time.January, 1, 0, 0, 0, 0, time.UTC)
-			offset := 0
-			fnames, err := filepath.Glob("pages/page*.json")
-			switch {
-			case err != nil:
-				return err
-			case len(fnames) == 0:
-				if _, err = os.Stat("pages"); os.IsNotExist(err) {
-					if err = os.Mkdir("pages", 0750); err != nil {
-						return err
-					}
-				}
-			default:
-				offset = len(fnames)
-				activities, err := api.ReadJSONs(fnames)
-				if err != nil {
-					return err
-				}
-				for _, act := range activities {
-					if act.StartDateLocal.After(epoch) {
-						epoch = act.StartDateLocal
-					}
-				}
-			}
-			cfg, err := config.Get(true)
-			if err != nil {
-				return err
-			}
-			strava := cfg.Strava
-			api.ClientId = strava.ClientID
-			api.ClientSecret = strava.ClientSecret
-			client := api.NewClient(strava.AccessToken)
-			current := api.NewCurrentAthleteService(client)
-			call := current.ListActivities()
-			call = call.After(int(epoch.Unix()))
-			stay := true
-			for page := 1; stay; page++ {
-				call = call.Page(page)
-				activities, err := call.Do()
-				if err != nil {
-					if page == 1 {
-						return fmt.Errorf("run mystats configure --client_id=... --client_secret=... first. err=%w", err)
-					}
-					return err
-				}
-				j, err := json.Marshal(activities)
-				if err != nil || len(activities) == 0 {
-					return err
-				}
-				fmt.Printf("%d => pages/page%d.json ...\n", page, page+offset)
-				if err = os.WriteFile(fmt.Sprintf("pages/page%d.json", page+offset), j, 0600); err != nil {
-					return err
-				}
-				stay = (len(activities) == 30)
-			}
-			return nil
+			return fetch()
 		},
 	}
 	return cmd
+}
+
+func fetch() error {
+	after, prior, err := getEpoch()
+	if err != nil {
+		return err
+	}
+	call, err := callListActivities(after)
+	if err != nil {
+		return err
+	}
+	_, err = saveActivities(call, prior)
+	return err
+}
+
+func pageFiles() ([]string, error) {
+	return filepath.Glob("pages/page*.json")
+}
+
+func getEpoch() (time.Time, int, error) {
+	epoch := time.Date(1970, time.January, 1, 0, 0, 0, 0, time.UTC)
+	fnames, err := pageFiles()
+	switch {
+	case err != nil:
+		return epoch, 0, err
+	case len(fnames) == 0:
+		if _, err = os.Stat("pages"); os.IsNotExist(err) {
+			if err = os.Mkdir("pages", 0750); err != nil {
+				return epoch, 0, err
+			}
+		}
+	}
+	offset := len(fnames)
+	activities, err := api.ReadJSONs(fnames)
+	if err != nil {
+		return epoch, offset, err
+	}
+	for _, act := range activities {
+		if act.StartDateLocal.After(epoch) {
+			epoch = act.StartDateLocal
+		}
+	}
+	return epoch, offset, nil
+}
+
+func callListActivities(after time.Time) (*api.CurrentAthleteListActivitiesCall, error) {
+	cfg, err := config.Get(true)
+	if err != nil {
+		return nil, err
+	}
+	strava := cfg.Strava
+	api.ClientId = strava.ClientID
+	api.ClientSecret = strava.ClientSecret
+	client := api.NewClient(strava.AccessToken)
+	current := api.NewCurrentAthleteService(client)
+	call := current.ListActivities()
+	return call.After(int(after.Unix())), nil
+}
+
+func saveActivities(call *api.CurrentAthleteListActivitiesCall, prior int) (int, error) {
+	page := 1
+	for {
+		call = call.Page(page)
+		activities, err := call.Do()
+		if err != nil {
+			if page == 1 {
+				return page, fmt.Errorf("run mystats configure --client_id=... --client_secret=... first. err=%w", err)
+			}
+			return page, err
+		}
+		if len(activities) == 0 {
+			return page - 1, err
+		}
+		j, err := json.Marshal(activities)
+		if err != nil {
+			return page, err
+		}
+		fmt.Printf("%d => pages/page%d.json ...\n", page, page+prior)
+		if err = os.WriteFile(fmt.Sprintf("pages/page%d.json", page+prior), j, 0600); err != nil {
+			return page, err
+		}
+		if len(activities) < 30 {
+			return page, nil
+		}
+		page++
+	}
 }

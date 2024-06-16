@@ -20,8 +20,8 @@ func listCmd(types []string) *cobra.Command {
 			flags := cmd.Flags()
 			types, _ := flags.GetStringSlice("type")
 			workouts, _ := flags.GetStringSlice("workout")
-			db := storage.Sqlite3{}
-			if err := db.Open(); err != nil {
+			db, err := makeDB()
+			if err != nil {
 				return err
 			}
 			defer db.Close()

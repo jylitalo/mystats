@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 
@@ -26,6 +27,7 @@ func configFile() (string, error) {
 }
 
 func Get(refresh bool) (*Config, error) {
+	setLogger()
 	fname, err := configFile()
 	if err != nil {
 		return nil, err
@@ -47,6 +49,16 @@ func Get(refresh bool) (*Config, error) {
 		_, err = cfg.Write()
 	}
 	return &cfg, err
+}
+
+func setLogger() {
+	lvl := &slog.LevelVar{}
+	// lvl.Set(slog.LevelDebug)
+	lvl.Set(slog.LevelInfo)
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+		Level: lvl,
+	}))
+	slog.SetDefault(logger)
 }
 
 func (cfg *Config) Write() (string, error) {
