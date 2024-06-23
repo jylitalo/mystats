@@ -26,7 +26,9 @@ func makeCmd() *cobra.Command {
 		Use:   "make",
 		Short: "Turn fetched JSON files into Sqlite database",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			db, err := makeDB()
+			flags := cmd.Flags()
+			update, _ := flags.GetBool("update")
+			db, err := makeDB(update)
 			if err != nil {
 				return err
 			}
@@ -34,6 +36,7 @@ func makeCmd() *cobra.Command {
 			return err
 		},
 	}
+	cmd.Flags().Bool("update", true, "update database")
 	return cmd
 }
 
@@ -52,10 +55,12 @@ func skipDB(db *storage.Sqlite3, fnames []string) bool {
 	return dbMtime.After(pagesMtime)
 }
 
-func makeDB() (Storage, error) {
+func makeDB(update bool) (Storage, error) {
 	slog.Info("Fetch activities from Strava")
-	if err := fetch(); err != nil {
-		return nil, err
+	if update {
+		if err := fetch(); err != nil {
+			return nil, err
+		}
 	}
 	fnames, err := pageFiles()
 	if err != nil {

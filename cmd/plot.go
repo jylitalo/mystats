@@ -19,9 +19,10 @@ func plotCmd(types []string) *cobra.Command {
 			measurement, _ := flags.GetString("measure")
 			output, _ := flags.GetString("output")
 			types, _ := flags.GetStringSlice("type")
+			update, _ := flags.GetBool("update")
 			month, _ := flags.GetInt("month")
 			day, _ := flags.GetInt("day")
-			db, err := makeDB()
+			db, err := makeDB(update)
 			if err != nil {
 				return err
 			}
@@ -34,9 +35,10 @@ func plotCmd(types []string) *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().String("output", "ytd.png", "output file")
 	cmd.Flags().String("measure", "distance", "measurement type (distance, elevation, ...)")
+	cmd.Flags().String("output", "ytd.png", "output file")
 	cmd.Flags().StringSlice("type", types, "sport types (run, trail run, ...)")
+	cmd.Flags().Bool("update", true, "update database")
 	cmd.Flags().Int("month", 12, "only search number of months")
 	cmd.Flags().Int("day", 31, "only search number of days from last --month")
 	return cmd

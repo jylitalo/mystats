@@ -41,6 +41,7 @@ func topCmd(types []string) *cobra.Command {
 			measurement, _ := flags.GetString("measure")
 			period, _ := flags.GetString("period")
 			types, _ := flags.GetStringSlice("type")
+			update, _ := flags.GetBool("update")
 			inYear := map[string]int{
 				"month": 12,
 				"week":  53,
@@ -55,12 +56,12 @@ func topCmd(types []string) *cobra.Command {
 			if _, ok := formatFn[format]; !ok {
 				return fmt.Errorf("unknown format: %s", format)
 			}
-			db, err := makeDB()
+			db, err := makeDB(update)
 			if err != nil {
 				return err
 			}
 			defer db.Close()
-			headers, results, err := stats.Top(db, measurement, period, types, limit)
+			headers, results, err := stats.Top(db, measurement, period, types, limit, nil)
 			if err != nil {
 				return err
 			}
@@ -73,5 +74,6 @@ func topCmd(types []string) *cobra.Command {
 	cmd.Flags().String("measure", "sum(distance)", "measurement type (sum(distance), max(elevation), ...)")
 	cmd.Flags().String("period", "week", "time period (week, month)")
 	cmd.Flags().StringSlice("type", types, "sport types (run, trail run, ...)")
+	cmd.Flags().Bool("update", true, "update database")
 	return cmd
 }

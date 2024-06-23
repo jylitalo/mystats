@@ -18,14 +18,15 @@ func listCmd(types []string) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			flags := cmd.Flags()
 			types, _ := flags.GetStringSlice("type")
+			update, _ := flags.GetBool("update")
 			workouts, _ := flags.GetStringSlice("workout")
-			db, err := makeDB()
+			db, err := makeDB(update)
 			if err != nil {
 				return err
 			}
 			defer db.Close()
 			table := tablewriter.NewWriter(os.Stdout)
-			headers, results, err := stats.List(db, types, workouts)
+			headers, results, err := stats.List(db, types, workouts, nil)
 			if err != nil {
 				return err
 			}
@@ -36,6 +37,7 @@ func listCmd(types []string) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringSlice("type", types, "sport types (run, trail run, ...)")
+	cmd.Flags().Bool("update", true, "update database")
 	cmd.Flags().StringSlice("workout", []string{}, "workout type")
 	return cmd
 }
