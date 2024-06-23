@@ -261,10 +261,10 @@ func Start(db Storage, types []string, port int) error {
 		var errL, errT error
 		pf := &page.Plot.Form
 		errP := page.Plot.render(db, types, pf.EndMonth, pf.EndDay, pf.Years)
-		page.List.Data.Headers, page.List.Data.Rows, errL = stats.List(db, types, page.List.Form.Workouts)
+		page.List.Data.Headers, page.List.Data.Rows, errL = stats.List(db, types, page.List.Form.Workouts, nil)
 		tf := &page.Top.Form
 		td := &page.Top.Data
-		td.Headers, td.Rows, errT = stats.Top(db, tf.measurement, tf.period, types, tf.limit)
+		td.Headers, td.Rows, errT = stats.Top(db, tf.measurement, tf.period, types, tf.limit, nil)
 		errR := c.Render(200, "index", page)
 		if err := errors.Join(errP, errL, errT, errR); err != nil {
 			log.Fatal(err)
@@ -281,11 +281,11 @@ func Start(db Storage, types []string, port int) error {
 		slog.Info("POST /list", "values", values)
 		workouts := []string{}
 		page.List.Form.Years = years
-		page.List.Data.Headers, page.List.Data.Rows, err = stats.List(db, types, workouts)
+		page.List.Data.Headers, page.List.Data.Rows, err = stats.List(db, types, workouts, selectedYears(years))
 		if err != nil {
 			log.Fatal(err)
 		}
-		if err = c.Render(200, "list-data", page); err != nil {
+		if err = c.Render(200, "list-data", page.List.Data); err != nil {
 			log.Fatal(err)
 		}
 		return nil
@@ -301,7 +301,7 @@ func Start(db Storage, types []string, port int) error {
 		tf := &page.Top.Form
 		tf.Years = years
 		td := &page.Top.Data
-		td.Headers, td.Rows, err = stats.Top(db, tf.measurement, tf.period, types, tf.limit)
+		td.Headers, td.Rows, err = stats.Top(db, tf.measurement, tf.period, types, tf.limit, selectedYears(years))
 		if err = c.Render(200, "top-data", td); err != nil {
 			log.Fatal(err)
 		}
