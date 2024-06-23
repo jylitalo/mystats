@@ -23,13 +23,13 @@ func (t *testDB) QueryYears(cond storage.Conditions) ([]int, error) {
 
 func TestTemplateRender(t *testing.T) {
 	p := newPage()
-	p.Data.plot = func(db plot.Storage, types []string, measurement string, month, day int, years []int, filename string) error {
+	p.Plot.Data.plot = func(db plot.Storage, types []string, measurement string, month, day int, years []int, filename string) error {
 		return nil
 	}
-	p.Data.stats = func(db stats.Storage, measurement, period string, types []string, month, day int, years []int) ([]int, [][]string, []string, error) {
+	p.Plot.Data.stats = func(db stats.Storage, measurement, period string, types []string, month, day int, years []int) ([]int, [][]string, []string, error) {
 		return nil, nil, nil, nil
 	}
-	err := p.render(&testDB{}, []string{"Run"}, 6, 12, map[int]bool{2024: true})
+	err := p.Plot.render(&testDB{}, []string{"Run"}, 6, 12, map[int]bool{2024: true})
 	if err != nil {
 		t.Error(err)
 	}
@@ -40,11 +40,11 @@ func TestTemplateRender(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	err = tmpl.Render(w, "data", p.Data, nil)
+	err = tmpl.Render(w, "plot-data", p.Plot.Data, nil)
 	if err != nil {
 		t.Error(err)
 	}
-	err = tmpl.Render(w, "form", p.Form, nil)
+	err = tmpl.Render(w, "plot-form", p.Plot.Form, nil)
 	if err != nil {
 		t.Error(err)
 	}

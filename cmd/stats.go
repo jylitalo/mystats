@@ -7,10 +7,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jylitalo/mystats/pkg/stats"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/olekukonko/tablewriter"
 	"github.com/spf13/cobra"
+
+	"github.com/jylitalo/mystats/pkg/stats"
 )
 
 // printCSV outputs results in CSV format
