@@ -59,13 +59,25 @@
 {{ block "list-tab" . }}
 {{ template "list-form" .Form }}
 <hr />
-{{ template "table-data" .Data }}
+{{ template "list-data" .Data }}
 {{ end }}
 
 {{ block "top-tab" . }}
 {{ template "top-form" .Form }}
 <hr />
-{{ template "table-data" .Data }}
+{{ template "top-data" .Data }}
+{{ end }}
+
+{{ block "list-data" . }}
+<div id="list-data">
+{{ template "table-data" . }}
+</div>
+{{ end }}
+
+{{ block "top-data" . }}
+<div id="top-data">
+{{ template "table-data" . }}
+</div>
 {{ end }}
 
 {{ block "plot-form" . }}
@@ -122,27 +134,27 @@
 {{ end }}
 
 {{ block "table-data" . }}
-<table>
-    <thead>
-        <tr>
-          {{ range $s := .Headers }}
-          <th>{{ $s }}</th>
-          {{ end }}
-      </tr>
-    </thead>
-    <tbody>
-        {{ range $row := .Rows }}
-            {{ $trimmed := joined $row }}
-            {{ if ne $trimmed "" }}
+    <table>
+        <thead>
             <tr>
-                {{ range $col := $row }}
-                    <td>{{ $col }}</td>
-                {{ end }}
-            </tr>
+            {{ range $s := .Headers }}
+            <th>{{ $s }}</th>
             {{ end }}
-        {{ end }}
-    </tbody>
-</table>
+        </tr>
+        </thead>
+        <tbody>
+            {{ range $row := .Rows }}
+                {{ $trimmed := joined $row }}
+                {{ if ne $trimmed "" }}
+                <tr>
+                    {{ range $col := $row }}
+                        <td>{{ $col }}</td>
+                    {{ end }}
+                </tr>
+                {{ end }}
+            {{ end }}
+        </tbody>
+    </table>
 {{ end }}
 
 {{ block "plot-data" . }}
