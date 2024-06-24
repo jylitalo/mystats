@@ -1,0 +1,22 @@
+{{ block "top-tab" . }}
+{{ template "top-form" .Form }}
+<hr />
+{{ template "top-data" .Data }}
+{{ end }}
+
+{{ block "top-data" . }}
+<div id="top-data">
+{{ template "table-data" . }}
+</div>
+{{ end }}
+
+{{ block "top-form" . }}
+<form hx-swap="outerHTML" hx-target="#top-data" hx-post="/top">
+    <div id="years">
+        Years:
+        {{ range $y, $v := .Years }}
+            <input type="checkbox" name="year_{{ $y }}"{{ if $v }} checked{{ end }} hx-swap="outerHTML" hx-target="#top-data" hx-post="/top"><label>{{ $y }}</label>
+        {{ end }}
+    </div>
+</form>
+{{ end }}

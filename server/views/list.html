@@ -1,0 +1,25 @@
+{{ block "list-tab" . }}
+{{ template "list-form" .Form }}
+<hr />
+{{ template "list-data" .Data }}
+{{ end }}
+
+{{ block "list-form" . }}
+<form hx-swap="outerHTML" hx-target="#list-data" hx-post="/list">
+    <div id="limit">
+
+    </div>
+    <div id="years">
+        Years:
+        {{ range $y, $v := .Years }}
+            <input type="checkbox" name="year_{{ $y }}"{{ if $v }} checked{{ end }} hx-swap="outerHTML" hx-target="#list-data" hx-post="/list"><label>{{ $y }}</label>
+        {{ end }}
+    </div>
+</form>
+{{ end }}
+
+{{ block "list-data" . }}
+<div id="list-data">
+{{ template "table-data" . }}
+</div>
+{{ end }}
