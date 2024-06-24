@@ -61,7 +61,8 @@ type ActivitySummary struct {
 	Truncated            int     `json:"truncated"` // only present if activity is owned by authenticated athlete, returns 0 if not truncated by privacy zones
 	HasKudoed            bool    `json:"has_kudoed"`
 
-	WorkoutTypeId int `json:"workout_type"`
+	SportType     string `json:"sport_type"`
+	WorkoutTypeId int    `json:"workout_type"`
 }
 
 func (as *ActivitySummary) WorkoutType() string {

@@ -20,6 +20,7 @@ type Record struct {
 	StravaID    int64
 	Name        string
 	Type        string
+	SportType   string
 	WorkoutType string
 	Distance    float64
 	Elevation   float64
@@ -84,6 +85,7 @@ func (sq *Sqlite3) Create() error {
 		StravaID    integer,
 		Name        text,
 		Type        text,
+		SportType   text,
 		WorkoutType text,
 		Distance    real,
 		Elevation   real,
@@ -100,7 +102,7 @@ func (sq *Sqlite3) Insert(records []Record) error {
 	if err != nil {
 		return err
 	}
-	stmt, err := tx.Prepare(`insert into mystats(Year,Month,Day,Week,StravaID,Name,Type,WorkoutType,Distance,Elevation,MovingTime) values (?,?,?,?,?,?,?,?,?,?,?)`)
+	stmt, err := tx.Prepare(`insert into mystats(Year,Month,Day,Week,StravaID,Name,Type,SportType,WorkoutType,Distance,Elevation,MovingTime) values (?,?,?,?,?,?,?,?,?,?,?,?)`)
 	if err != nil {
 		return fmt.Errorf("insert caused %w", err)
 	}
@@ -108,7 +110,7 @@ func (sq *Sqlite3) Insert(records []Record) error {
 	for _, r := range records {
 		_, err = stmt.Exec(
 			r.Year, r.Month, r.Day, r.Week, r.StravaID,
-			r.Name, r.Type, r.WorkoutType,
+			r.Name, r.Type, r.SportType, r.WorkoutType,
 			r.Distance, r.Elevation, r.MovingTime,
 		)
 		if err != nil {

@@ -136,7 +136,7 @@ func (c *CurrentAthleteListActivitiesCall) Do() ([]*ActivitySummary, error) {
 	if err != nil {
 		return nil, err
 	}
-
+	// fmt.Println(string(data))
 	activities := make([]*ActivitySummary, 0)
 	err = json.Unmarshal(data, &activities)
 	if err != nil {

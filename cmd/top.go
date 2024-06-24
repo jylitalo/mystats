@@ -14,7 +14,7 @@ import (
 
 // printCSV outputs results in CSV format
 func printTopCSV(headers []string, results [][]string) {
-	fmt.Printf(strings.Join(headers, ","))
+	fmt.Print(strings.Join(headers, ","))
 	fmt.Println()
 	for idx := range results {
 		fmt.Println(strings.Join(results[idx], ","))

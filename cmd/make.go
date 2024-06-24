@@ -89,6 +89,7 @@ func makeDB(update bool) (Storage, error) {
 			Week:        week,
 			Name:        activity.Name,
 			Type:        activity.Type.String(),
+			SportType:   activity.SportType,
 			WorkoutType: activity.WorkoutType(),
 			Distance:    activity.Distance,
 			Elevation:   activity.TotalElevationGain,
