@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"log/slog"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -25,7 +26,7 @@ type Storage interface {
 	QueryYears(cond storage.Conditions) ([]int, error)
 }
 
-type Data struct {
+type PlotData struct {
 	Years       []int
 	Measurement string
 	Stats       [][]string
@@ -35,38 +36,139 @@ type Data struct {
 	stats       func(db stats.Storage, measurement, period string, types []string, month, day int, years []int) ([]int, [][]string, []string, error)
 }
 
-func newData() Data {
-	return Data{
+func newPlotData() PlotData {
+	return PlotData{
 		Measurement: "sum(distance)",
 		plot:        plot.Plot,
 		stats:       stats.Stats,
 	}
 }
 
-type FormData struct {
+type PlotFormData struct {
 	EndMonth int
 	EndDay   int
 	Years    map[int]bool
 }
 
-func newFormData() FormData {
+func newPlotFormData() PlotFormData {
 	t := time.Now()
-	return FormData{
+	return PlotFormData{
 		EndMonth: int(t.Month()),
 		EndDay:   t.Day(),
 		Years:    map[int]bool{},
 	}
 }
 
+type PlotPage struct {
+	Data PlotData
+	Form PlotFormData
+}
+
+func newPlotPage() *PlotPage {
+	return &PlotPage{
+		Data: newPlotData(),
+		Form: newPlotFormData(),
+	}
+}
+
+func (p *PlotPage) render(db Storage, types []string, month, day int, years map[int]bool) error {
+	p.Form.EndMonth = month
+	p.Form.EndDay = day
+	p.Form.Years = years
+	checked := selectedYears(years)
+	d := &p.Data
+	d.Filename = "cache/plot-" + uuid.NewString() + ".png"
+	err := d.plot(db, types, "distance", month, day, checked, "server/"+d.Filename)
+	if err != nil {
+		slog.Error("failed to plot", "err", err)
+		return err
+	}
+	d.Years, d.Stats, d.Totals, err = d.stats(db, d.Measurement, "month", types, month, day, checked)
+	if err != nil {
+		slog.Error("failed to calculate stats", "err", err)
+	}
+	return err
+}
+
+type TableData struct {
+	Headers []string
+	Rows    [][]string
+}
+
+func newTableData() TableData {
+	return TableData{
+		Headers: []string{},
+		Rows:    [][]string{},
+	}
+}
+
+type ListFormData struct {
+	Name     string
+	Workouts []string
+	Years    map[int]bool
+}
+
+func newListFormData() ListFormData {
+	return ListFormData{
+		Name:     "list",
+		Workouts: []string{},
+		Years:    map[int]bool{},
+	}
+}
+
+type ListPage struct {
+	Form ListFormData
+	Data TableData
+}
+
+func newListPage() *ListPage {
+	return &ListPage{
+		Form: newListFormData(),
+		Data: newTableData(),
+	}
+}
+
+type TopFormData struct {
+	Name        string
+	Years       map[int]bool
+	measurement string
+	period      string
+	limit       int
+}
+
+func newTopFormData() TopFormData {
+	return TopFormData{
+		Name:        "top",
+		Years:       map[int]bool{},
+		measurement: "sum(distance)",
+		period:      "week",
+		limit:       100,
+	}
+}
+
+type TopPage struct {
+	Form TopFormData
+	Data TableData
+}
+
+func newTopPage() *TopPage {
+	return &TopPage{
+		Form: newTopFormData(),
+		Data: newTableData(),
+	}
+}
+
 type Page struct {
-	Data Data
-	Form FormData
+	Plot *PlotPage
+	List *ListPage
+	Top  *TopPage
 }
 
 func newPage() *Page {
 	return &Page{
-		Data: newData(),
-		Form: newFormData(),
+		Plot: newPlotPage(),
+		List: newListPage(),
+		Top:  newTopPage(),
 	}
 }
 
@@ -108,28 +210,31 @@ func (t *Template) Render(w io.Writer, name string, data interface{}, c echo.Con
 	return t.tmpl.ExecuteTemplate(w, name, data)
 }
 
-func (p *Page) render(db Storage, types []string, month, day int, years map[int]bool) error {
-	p.Form.EndMonth = month
-	p.Form.EndDay = day
-	p.Form.Years = years
+func selectedYears(years map[int]bool) []int {
 	checked := []int{}
 	for k, v := range years {
 		if v {
 			checked = append(checked, k)
 		}
 	}
-	d := &p.Data
-	d.Filename = "cache/plot-" + uuid.NewString() + ".png"
-	err := d.plot(db, types, "distance", month, day, checked, "server/"+d.Filename)
-	if err != nil {
-		slog.Error("failed to plot", "err", err)
-		return err
+	return checked
+}
+
+func yearValues(values url.Values) (map[int]bool, error) {
+	if values == nil {
+		return nil, errors.New("no values given")
 	}
-	d.Years, d.Stats, d.Totals, err = d.stats(db, d.Measurement, "month", types, month, day, checked)
-	if err != nil {
-		slog.Error("failed to calculate stats", "err", err)
+	years := map[int]bool{}
+	for k, v := range values {
+		if strings.HasPrefix(k, "year_") {
+			y, err := strconv.Atoi(k[5:])
+			if err != nil {
+				return nil, err
+			}
+			years[y] = (len(v) > 0 && v[0] == "on")
+		}
 	}
-	return err
+	return years, nil
 }
 
 func Start(db Storage, types []string, port int) error {
@@ -141,22 +246,63 @@ func Start(db Storage, types []string, port int) error {
 	e.Static("/css", "server/css")
 
 	page := newPage()
-	page.Data.Measurement = "sum(distance)"
 	years, err := db.QueryYears(storage.Conditions{})
 	if err != nil {
 		return err
 	}
 	for _, y := range years {
-		page.Form.Years[y] = true
+		page.List.Form.Years[y] = true
+		page.Plot.Form.Years[y] = true
+		page.Top.Form.Years[y] = true
 	}
 	slog.Info("starting things", "page", page)
 
 	e.GET("/", func(c echo.Context) error {
-		if err := page.render(db, types, page.Form.EndMonth, page.Form.EndDay, page.Form.Years); err != nil {
+		var errL, errT error
+		pf := &page.Plot.Form
+		errP := page.Plot.render(db, types, pf.EndMonth, pf.EndDay, pf.Years)
+		page.List.Data.Headers, page.List.Data.Rows, errL = stats.List(db, types, page.List.Form.Workouts, nil)
+		tf := &page.Top.Form
+		td := &page.Top.Data
+		td.Headers, td.Rows, errT = stats.Top(db, tf.measurement, tf.period, types, tf.limit, nil)
+		errR := c.Render(200, "index", page)
+		if err := errors.Join(errP, errL, errT, errR); err != nil {
 			log.Fatal(err)
 		}
-		// slog.Info("GET /", "page", page)
-		if err = c.Render(200, "index", page); err != nil {
+		return nil
+	})
+
+	e.POST("/list", func(c echo.Context) error {
+		values, errV := c.FormParams()
+		years, errY := yearValues(values)
+		if err := errors.Join(errV, errY); err != nil {
+			log.Fatal(err)
+		}
+		slog.Info("POST /list", "values", values)
+		workouts := []string{}
+		page.List.Form.Years = years
+		page.List.Data.Headers, page.List.Data.Rows, err = stats.List(db, types, workouts, selectedYears(years))
+		if err != nil {
+			log.Fatal(err)
+		}
+		if err = c.Render(200, "list-data", page.List.Data); err != nil {
+			log.Fatal(err)
+		}
+		return nil
+	})
+
+	e.POST("/top", func(c echo.Context) error {
+		values, errV := c.FormParams()
+		years, errY := yearValues(values)
+		if err := errors.Join(errV, errY); err != nil {
+			log.Fatal(err)
+		}
+		slog.Info("POST /top", "values", values)
+		tf := &page.Top.Form
+		tf.Years = years
+		td := &page.Top.Data
+		td.Headers, td.Rows, err = stats.Top(db, tf.measurement, tf.period, types, tf.limit, selectedYears(years))
+		if err = c.Render(200, "top-data", td); err != nil {
 			log.Fatal(err)
 		}
 		return nil
@@ -166,25 +312,16 @@ func Start(db Storage, types []string, port int) error {
 		month, errM := strconv.Atoi(c.FormValue("EndMonth"))
 		day, errD := strconv.Atoi(c.FormValue("EndDay"))
 		values, errV := c.FormParams()
-		if err := errors.Join(errM, errD, errV); err != nil {
+		years, errY := yearValues(values)
+		if err := errors.Join(errM, errD, errV, errY); err != nil {
 			log.Fatal(err)
 		}
-		slog.Info("POST", "values", values)
-		years := map[int]bool{}
-		for k, v := range values {
-			if strings.HasPrefix(k, "year_") {
-				y, err := strconv.Atoi(k[5:])
-				if err != nil {
-					return err
-				}
-				years[y] = (len(v) > 0 && v[0] == "on")
-			}
-		}
-		if err := page.render(db, types, month, day, years); err != nil {
+		slog.Info("POST /plot", "values", values)
+		if err := page.Plot.render(db, types, month, day, years); err != nil {
 			return err
 		}
 		// slog.Info("POST /plot", "page", page)
-		return c.Render(200, "data", page.Data)
+		return c.Render(200, "plot-data", page.Plot.Data)
 	})
 	e.Logger.Fatal(e.Start(":" + strconv.FormatInt(int64(port), 10)))
 	return nil

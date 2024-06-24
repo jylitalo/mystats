@@ -7,10 +7,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jylitalo/mystats/pkg/stats"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/olekukonko/tablewriter"
 	"github.com/spf13/cobra"
+
+	"github.com/jylitalo/mystats/pkg/stats"
 )
 
 // printCSV outputs results in CSV format
@@ -65,6 +66,7 @@ func statsCmd(types []string) *cobra.Command {
 			measurement, _ := flags.GetString("measure")
 			period, _ := flags.GetString("period")
 			types, _ := flags.GetStringSlice("type")
+			update, _ := flags.GetBool("update")
 			month, _ := flags.GetInt("month")
 			day, _ := flags.GetInt("day")
 			formatFn := map[string]func(period string, measurement string, years []int, results [][]string, totals []string){
@@ -74,7 +76,7 @@ func statsCmd(types []string) *cobra.Command {
 			if _, ok := formatFn[format]; !ok {
 				return fmt.Errorf("unknown format: %s", format)
 			}
-			db, err := makeDB()
+			db, err := makeDB(update)
 			if err != nil {
 				return err
 			}
@@ -91,6 +93,7 @@ func statsCmd(types []string) *cobra.Command {
 	cmd.Flags().String("measure", "sum(distance)", "measurement type (sum(distance), max(elevation), ...)")
 	cmd.Flags().String("period", "week", "time period (week, month)")
 	cmd.Flags().StringSlice("type", types, "sport types (run, trail run, ...)")
+	cmd.Flags().Bool("update", true, "update database")
 	cmd.Flags().Int("month", 12, "only search number of months")
 	cmd.Flags().Int("day", 31, "only search number of days from last --month")
 	return cmd

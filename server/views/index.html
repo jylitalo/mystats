@@ -9,33 +9,82 @@
         <script src="https://unpkg.com/htmx.org/dist/htmx.min.js"></script>
     </head>
     <body>
-        {{ template "form" .Form }}
-        <hr />
-        {{ template "data" .Data }}
+        <div class="tab">
+            <button class="tablinks" onclick="openTab(event, 'Plot')" id="defaultOpen">Plot</button>
+            <button class="tablinks" onclick="openTab(event, 'List')">List</button>
+            <button class="tablinks" onclick="openTab(event, 'Top')">Top</button>
+        </div>
+        <div id="Plot" class="tabcontent">
+            {{ template "plot-tab" .Plot }}
+        </div>
+        <div id="List" class="tabcontent">
+            {{ template "list-tab" .List }}
+        </div>
+        <div id="Top" class="tabcontent">
+            {{ template "top-tab" .Top }}
+        </div>
         <script>
-        document.addEventListener("DOMContentLoaded", (event) => {
-            document.body.addEventListener('htmx:beforeSwap', function(evt) {
-                if (evt.detail.xhr.status === 422) {
-                    // allow 422 responses to swap as we are using this as a signal that
-                    // a form was submitted with bad data and want to rerender with the
-                    // errors
-                    //
-                    // set isError to false to avoid error logging in console
-                    evt.detail.shouldSwap = true;
-                    evt.detail.isError = false;
-                }
-            });
-        })
+            function openTab(evt, cityName) {
+              // Declare all variables
+              var i, tabcontent, tablinks;
+            
+              // Get all elements with class="tabcontent" and hide them
+              tabcontent = document.getElementsByClassName("tabcontent");
+              for (i = 0; i < tabcontent.length; i++) {
+                tabcontent[i].style.display = "none";
+              }
+            
+              // Get all elements with class="tablinks" and remove the class "active"
+              tablinks = document.getElementsByClassName("tablinks");
+              for (i = 0; i < tablinks.length; i++) {
+                tablinks[i].className = tablinks[i].className.replace(" active", "");
+              }
+            
+              // Show the current tab, and add an "active" class to the button that opened the tab
+              document.getElementById(cityName).style.display = "block";
+              evt.currentTarget.className += " active";
+            }
+            document.getElementById("defaultOpen").click();
         </script>
     </body>
 </html>
 {{ end }}
 
-{{ block "form" . }}
-<form hx-swap="outerHTML" hx-target="#data" hx-post="/plot">
+{{ block "plot-tab" . }}
+{{ template "plot-form" .Form }}
+<hr />
+{{ template "plot-data" .Data }}
+{{ end }}
+
+{{ block "list-tab" . }}
+{{ template "list-form" .Form }}
+<hr />
+{{ template "list-data" .Data }}
+{{ end }}
+
+{{ block "top-tab" . }}
+{{ template "top-form" .Form }}
+<hr />
+{{ template "top-data" .Data }}
+{{ end }}
+
+{{ block "list-data" . }}
+<div id="list-data">
+{{ template "table-data" . }}
+</div>
+{{ end }}
+
+{{ block "top-data" . }}
+<div id="top-data">
+{{ template "table-data" . }}
+</div>
+{{ end }}
+
+{{ block "plot-form" . }}
+<form hx-swap="outerHTML" hx-target="#plot-data" hx-post="/plot">
     <div id="month">
         Month:
-        <select hx-swap="outerHTML" hx-target="#data" hx-post="/plot" name="EndMonth">
+        <select hx-swap="outerHTML" hx-target="#plot-data" hx-post="/plot" name="EndMonth">
             {{ $endMonth := .EndMonth}}
             {{ range $m := N 1 13 }}
                 <option value="{{ $m }}"{{ if eq $m $endMonth }}  SELECTED{{ end }}>{{ month $m }}</option>
@@ -44,7 +93,7 @@
     </div>
     <div id="day">
         Day:
-        <select hx-swap="outerHTML" hx-target="#data" hx-post="/plot" name="EndDay">
+        <select hx-swap="outerHTML" hx-target="#plot-data" hx-post="/plot" name="EndDay">
             {{ $endDay := .EndDay}}
             {{ range $d := N 1 32 }}
                 <option value="{{ $d }}"{{ if eq $d $endDay }}  selected{{ end }}>{{ $d }}</option>
@@ -54,21 +103,69 @@
     <div id="years">
         Years:
         {{ range $y, $v := .Years }}
-            <input type="checkbox" name="year_{{ $y }}"{{ if $v }} checked{{ end }} hx-swap="outerHTML" hx-target="#data" hx-post="/plot"><label>{{ $y }}</label>
+            <input type="checkbox" name="year_{{ $y }}"{{ if $v }} checked{{ end }} hx-swap="outerHTML" hx-target="#plot-data" hx-post="/plot"><label>{{ $y }}</label>
         {{ end }}
     </div>
 </form>
 {{ end }}
 
-{{ block "data" . }}
-<div id="data">
-    {{ template "plot" . }}
+{{ block "list-form" . }}
+{{ $name := .Name}}
+<form hx-swap="outerHTML" hx-target="#{{ $name }}-data" hx-post="/{{ $name }}">
+    <div id="years">
+        Years:
+        {{ range $y, $v := .Years }}
+            <input type="checkbox" name="year_{{ $y }}"{{ if $v }} checked{{ end }} hx-swap="outerHTML" hx-target="#{{ $name }}-data" hx-post="/{{ $name }}"><label>{{ $y }}</label>
+        {{ end }}
+    </div>
+</form>
+{{ end }}
+
+{{ block "top-form" . }}
+{{ $name := .Name}}
+<form hx-swap="outerHTML" hx-target="#{{ $name }}-data" hx-post="/{{ $name }}">
+    <div id="years">
+        Years:
+        {{ range $y, $v := .Years }}
+            <input type="checkbox" name="year_{{ $y }}"{{ if $v }} checked{{ end }} hx-swap="outerHTML" hx-target="#{{ $name }}-data" hx-post="/{{ $name }}"><label>{{ $y }}</label>
+        {{ end }}
+    </div>
+</form>
+{{ end }}
+
+{{ block "table-data" . }}
+    <table>
+        <thead>
+            <tr>
+            {{ range $s := .Headers }}
+            <th>{{ $s }}</th>
+            {{ end }}
+        </tr>
+        </thead>
+        <tbody>
+            {{ range $row := .Rows }}
+                {{ $trimmed := joined $row }}
+                {{ if ne $trimmed "" }}
+                <tr>
+                    {{ range $col := $row }}
+                        <td>{{ $col }}</td>
+                    {{ end }}
+                </tr>
+                {{ end }}
+            {{ end }}
+        </tbody>
+    </table>
+{{ end }}
+
+{{ block "plot-data" . }}
+<div id="plot-data">
+    {{ template "plot-plot" . }}
     <hr />
-    {{ template "stats" . }}
+    {{ template "plot-stats" . }}
 </div>
 {{ end }}
 
-{{ block "plot" . }}
+{{ block "plot-plot" . }}
 <div id="plot" style="display: flex; flex-direction: column">
     {{ if .Filename -}}
     <img src="{{ .Filename }}" alt="" />
@@ -76,7 +173,7 @@
 </div>
 {{ end }}
 
-{{ block "stats" . }}
+{{ block "plot-stats" . }}
 <table>
     <thead>
         <tr>

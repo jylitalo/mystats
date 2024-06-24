@@ -17,7 +17,8 @@ func serverCmd(types []string) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			flags := cmd.Flags()
 			port, _ := flags.GetInt("port")
-			db, err := makeDB()
+			update, _ := flags.GetBool("update")
+			db, err := makeDB(update)
 			if err != nil {
 				return err
 			}
@@ -27,5 +28,6 @@ func serverCmd(types []string) *cobra.Command {
 		},
 	}
 	cmd.Flags().Int("port", 8000, "Port number for service")
+	cmd.Flags().Bool("update", true, "Update database")
 	return cmd
 }
