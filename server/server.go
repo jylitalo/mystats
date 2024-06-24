@@ -151,7 +151,6 @@ func indexGet(page *Page, db Storage, types []string) func(c echo.Context) error
 		tf := &page.Top.Form
 		td := &page.Top.Data
 		td.Headers, td.Rows, errT = stats.Top(db, tf.measurement, tf.period, types, tf.limit, nil)
-		errR := c.Render(200, "index", page)
-		return errors.Join(errP, errL, errT, errR)
+		return errors.Join(errP, errL, errT, c.Render(200, "index", page))
 	}
 }

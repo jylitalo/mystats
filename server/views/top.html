@@ -6,7 +6,27 @@
 
 {{ block "top-data" . }}
 <div id="top-data">
-{{ template "table-data" . }}
+    <table>
+        <thead>
+            <tr>
+            {{ range $s := .Headers }}
+            <th>{{ $s }}</th>
+            {{ end }}
+        </tr>
+        </thead>
+        <tbody>
+            {{ range $row := .Rows }}
+                {{ $trimmed := joined $row }}
+                {{ if ne $trimmed "" }}
+                <tr>
+                    {{ range $col := $row }}
+                        <td>{{ $col }}</td>
+                    {{ end }}
+                </tr>
+                {{ end }}
+            {{ end }}
+        </tbody>
+    </table>
 </div>
 {{ end }}
 

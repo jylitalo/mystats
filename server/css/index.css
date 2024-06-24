@@ -48,6 +48,10 @@ table td {
     text-align: right;
 }
 
+table td.name {
+    text-align: left;
+}
+
 table tbody tr {
     border-bottom: 1px solid #dddddd;
 }
