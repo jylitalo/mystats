@@ -20,6 +20,7 @@ import (
 
 type Storage interface {
 	Query(fields []string, cond storage.Conditions, order *storage.Order) (*sql.Rows, error)
+	QueryTypes(cond storage.Conditions) ([]string, error)
 	QueryYears(cond storage.Conditions) ([]int, error)
 }
 
@@ -68,6 +69,9 @@ func newTemplate(path string) *Template {
 		"dec": func(i int) int {
 			return i - 1
 		},
+		"esc": func(s string) string {
+			return strings.ReplaceAll(s, " ", "_")
+		},
 		"inc": func(i int) int {
 			return i + 1
 		},
@@ -87,6 +91,16 @@ func (t *Template) Render(w io.Writer, name string, data interface{}, c echo.Con
 	return t.tmpl.ExecuteTemplate(w, name, data)
 }
 
+func selectedTypes(types map[string]bool) []string {
+	checked := []string{}
+	for k, v := range types {
+		if v {
+			checked = append(checked, k)
+		}
+	}
+	return checked
+}
+
 func selectedYears(years map[int]bool) []int {
 	checked := []int{}
 	for k, v := range years {
@@ -97,9 +111,23 @@ func selectedYears(years map[int]bool) []int {
 	return checked
 }
 
+func typeValues(values url.Values) (map[string]bool, error) {
+	if values == nil {
+		return nil, errors.New("no type values given")
+	}
+	types := map[string]bool{}
+	for k, v := range values {
+		if strings.HasPrefix(k, "type_") {
+			tv := strings.ReplaceAll(k[5:], "_", " ")
+			types[tv] = (len(tv) > 0 && v[0] == "on")
+		}
+	}
+	return types, nil
+}
+
 func yearValues(values url.Values) (map[int]bool, error) {
 	if values == nil {
-		return nil, errors.New("no values given")
+		return nil, errors.New("no year values given")
 	}
 	years := map[int]bool{}
 	for k, v := range values {
@@ -114,8 +142,7 @@ func yearValues(values url.Values) (map[int]bool, error) {
 	return years, nil
 }
 
-func Start(db Storage, types []string, port int) error {
-	var err error
+func Start(db Storage, selectedTypes []string, port int) error {
 	e := echo.New()
 	e.Renderer = newTemplate("server/views/*.html")
 	e.Use(middleware.Logger())
@@ -123,9 +150,22 @@ func Start(db Storage, types []string, port int) error {
 	e.Static("/css", "server/css")
 
 	page := newPage()
-	years, err := db.QueryYears(storage.Conditions{})
-	if err != nil {
+	types, errT := db.QueryTypes(storage.Conditions{})
+	years, errY := db.QueryYears(storage.Conditions{})
+	if err := errors.Join(errT, errY); err != nil {
 		return err
+	}
+	// it is faster to first mark everything false and afterwards change selected one to true,
+	// instead of going through all types and checking on every type, if it is contained in selectedTypes or not.
+	for _, t := range types {
+		page.List.Form.Types[t] = false
+		page.Plot.Form.Types[t] = false
+		page.Top.Form.Types[t] = false
+	}
+	for _, t := range selectedTypes {
+		page.List.Form.Types[t] = true
+		page.Plot.Form.Types[t] = true
+		page.Top.Form.Types[t] = true
 	}
 	for _, y := range years {
 		page.List.Form.Years[y] = true
@@ -134,19 +174,20 @@ func Start(db Storage, types []string, port int) error {
 	}
 	slog.Info("starting things", "page", page)
 
-	e.GET("/", indexGet(page, db, types))
-	e.POST("/list", listPost(page, db, types))
-	e.POST("/plot", plotPost(page, db, types))
-	e.POST("/top", topPost(page, db, types))
+	e.GET("/", indexGet(page, db))
+	e.POST("/list", listPost(page, db))
+	e.POST("/plot", plotPost(page, db))
+	e.POST("/top", topPost(page, db))
 	e.Logger.Fatal(e.Start(":" + strconv.FormatInt(int64(port), 10)))
 	return nil
 }
 
-func indexGet(page *Page, db Storage, types []string) func(c echo.Context) error {
+func indexGet(page *Page, db Storage) func(c echo.Context) error {
 	return func(c echo.Context) error {
 		var errL, errT error
 		pf := &page.Plot.Form
-		errP := page.Plot.render(db, types, pf.EndMonth, pf.EndDay, pf.Years)
+		types := selectedTypes(pf.Types)
+		errP := page.Plot.render(db, pf.Types, pf.EndMonth, pf.EndDay, pf.Years)
 		page.List.Data.Headers, page.List.Data.Rows, errL = stats.List(db, types, page.List.Form.Workouts, nil)
 		tf := &page.Top.Form
 		td := &page.Top.Data

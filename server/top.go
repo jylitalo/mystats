@@ -10,6 +10,8 @@ import (
 )
 
 type TopFormData struct {
+	Name        string
+	Types       map[string]bool
 	Years       map[int]bool
 	measurement string
 	period      string
@@ -18,6 +20,8 @@ type TopFormData struct {
 
 func newTopFormData() TopFormData {
 	return TopFormData{
+		Name:        "top",
+		Types:       map[string]bool{},
 		Years:       map[int]bool{},
 		measurement: "sum(distance)",
 		period:      "week",
@@ -37,20 +41,21 @@ func newTopPage() *TopPage {
 	}
 }
 
-func topPost(page *Page, db Storage, types []string) func(c echo.Context) error {
+func topPost(page *Page, db Storage) func(c echo.Context) error {
 	return func(c echo.Context) error {
 		var err error
 
 		values, errV := c.FormParams()
+		types, errT := typeValues(values)
 		years, errY := yearValues(values)
-		if err = errors.Join(errV, errY); err != nil {
+		if err = errors.Join(errV, errT, errY); err != nil {
 			log.Fatal(err)
 		}
 		slog.Info("POST /top", "values", values)
 		tf := &page.Top.Form
 		tf.Years = years
 		td := &page.Top.Data
-		td.Headers, td.Rows, err = stats.Top(db, tf.measurement, tf.period, types, tf.limit, selectedYears(years))
+		td.Headers, td.Rows, err = stats.Top(db, tf.measurement, tf.period, selectedTypes(types), tf.limit, selectedYears(years))
 		return errors.Join(err, c.Render(200, "top-data", td))
 	}
 }

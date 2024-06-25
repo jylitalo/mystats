@@ -49,3 +49,24 @@
     </body>
 </html>
 {{ end }}
+
+
+{{ block "types" . }}
+{{ $name := .Name }}
+<div id="types">
+    Types:
+    {{ range $t, $v := .Types }}
+        <input type="checkbox" name="type_{{ esc $t }}"{{ if $v }} checked{{ end }} hx-swap="outerHTML" hx-target="#{{ $name }}-data" hx-post="/{{ $name }}"><label>{{ $t }}</label>
+    {{ end }}
+</div>
+{{ end }}
+
+{{ block "years" . }}
+{{ $name := .Name }}
+<div id="years">
+    Years:
+    {{ range $y, $v := .Years }}
+        <input type="checkbox" name="year_{{ $y }}"{{ if $v }} checked{{ end }} hx-swap="outerHTML" hx-target="#{{ $name }}-data" hx-post="/{{ $name }}"><label>{{ $y }}</label>
+    {{ end }}
+</div>
+{{ end }}

@@ -9,12 +9,8 @@
     <div id="limit">
 
     </div>
-    <div id="years">
-        Years:
-        {{ range $y, $v := .Years }}
-            <input type="checkbox" name="year_{{ $y }}"{{ if $v }} checked{{ end }} hx-swap="outerHTML" hx-target="#list-data" hx-post="/list"><label>{{ $y }}</label>
-        {{ end }}
-    </div>
+    {{ template "types" . }}
+    {{ template "years" . }}
 </form>
 {{ end }}
 

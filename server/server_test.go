@@ -17,6 +17,10 @@ func (t *testDB) Query(fields []string, cond storage.Conditions, order *storage.
 	return nil, nil
 }
 
+func (t *testDB) QueryTypes(cond storage.Conditions) ([]string, error) {
+	return nil, nil
+}
+
 func (t *testDB) QueryYears(cond storage.Conditions) ([]int, error) {
 	return nil, nil
 }
@@ -29,7 +33,7 @@ func TestTemplateRender(t *testing.T) {
 	p.Plot.Data.stats = func(db stats.Storage, measurement, period string, types []string, month, day int, years []int) ([]int, [][]string, []string, error) {
 		return nil, nil, nil, nil
 	}
-	err := p.Plot.render(&testDB{}, []string{"Run"}, 6, 12, map[int]bool{2024: true})
+	err := p.Plot.render(&testDB{}, map[string]bool{"Run": true}, 6, 12, map[int]bool{2024: true})
 	if err != nil {
 		t.Error(err)
 	}
