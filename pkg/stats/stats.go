@@ -13,7 +13,7 @@ type Storage interface {
 	QueryYears(cond storage.Conditions) ([]int, error)
 }
 
-func Stats(db Storage, measurement, period string, types []string, month, day int, years []int) ([]int, [][]string, []string, error) {
+func Stats(db Storage, measurement, period string, types, workoutTypes []string, month, day int, years []int) ([]int, [][]string, []string, error) {
 	inYear := map[string]int{
 		"month": 12,
 		"week":  53,
@@ -21,7 +21,7 @@ func Stats(db Storage, measurement, period string, types []string, month, day in
 	if _, ok := inYear[period]; !ok {
 		return nil, nil, nil, fmt.Errorf("unknown period: %s", period)
 	}
-	cond := storage.Conditions{Types: types, Month: month, Day: day, Years: years}
+	cond := storage.Conditions{Types: types, WorkoutTypes: workoutTypes, Month: month, Day: day, Years: years}
 	results := make([][]string, inYear[period])
 	years, err := db.QueryYears(cond)
 	if err != nil {

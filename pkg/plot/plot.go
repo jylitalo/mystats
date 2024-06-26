@@ -20,9 +20,9 @@ type Storage interface {
 	QueryYears(cond storage.Conditions) ([]int, error)
 }
 
-func Plot(db Storage, types []string, measurement string, month, day int, years []int, filename string) error {
+func Plot(db Storage, types, workoutTypes []string, measurement string, month, day int, years []int, filename string) error {
 	tz, _ := time.LoadLocation("Europe/Helsinki")
-	cond := storage.Conditions{Types: types, Month: month, Day: day, Years: years}
+	cond := storage.Conditions{Types: types, WorkoutTypes: workoutTypes, Month: month, Day: day, Years: years}
 	years, err := db.QueryYears(cond)
 	if err != nil {
 		return err

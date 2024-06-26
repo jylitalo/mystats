@@ -21,19 +21,23 @@ func (t *testDB) QueryTypes(cond storage.Conditions) ([]string, error) {
 	return nil, nil
 }
 
+func (t *testDB) QueryWorkoutTypes(cond storage.Conditions) ([]string, error) {
+	return nil, nil
+}
+
 func (t *testDB) QueryYears(cond storage.Conditions) ([]int, error) {
 	return nil, nil
 }
 
 func TestTemplateRender(t *testing.T) {
 	p := newPage()
-	p.Plot.Data.plot = func(db plot.Storage, types []string, measurement string, month, day int, years []int, filename string) error {
+	p.Plot.Data.plot = func(db plot.Storage, types, workoutTypes []string, measurement string, month, day int, years []int, filename string) error {
 		return nil
 	}
-	p.Plot.Data.stats = func(db stats.Storage, measurement, period string, types []string, month, day int, years []int) ([]int, [][]string, []string, error) {
+	p.Plot.Data.stats = func(db stats.Storage, measurement, period string, types, workoutTypes []string, month, day int, years []int) ([]int, [][]string, []string, error) {
 		return nil, nil, nil, nil
 	}
-	err := p.Plot.render(&testDB{}, map[string]bool{"Run": true}, 6, 12, map[int]bool{2024: true})
+	err := p.Plot.render(&testDB{}, map[string]bool{"Run": true}, nil, 6, 12, map[int]bool{2024: true})
 	if err != nil {
 		t.Error(err)
 	}

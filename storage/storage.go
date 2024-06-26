@@ -28,11 +28,11 @@ type Record struct {
 }
 
 type Conditions struct {
-	Types    []string
-	Workouts []string
-	Years    []int
-	Month    int
-	Day      int
+	Types        []string
+	WorkoutTypes []string
+	Years        []int
+	Month        int
+	Day          int
 }
 
 type Order struct {
@@ -122,8 +122,8 @@ func (sq *Sqlite3) Insert(records []Record) error {
 
 func sqlQuery(fields []string, cond Conditions, order *Order) string {
 	where := []string{}
-	if cond.Workouts != nil {
-		where = append(where, "(workouttype='"+strings.Join(cond.Workouts, "' or workout_type='")+"')")
+	if cond.WorkoutTypes != nil {
+		where = append(where, "(workouttype='"+strings.Join(cond.WorkoutTypes, "' or workouttype='")+"')")
 	}
 	if cond.Types != nil {
 		where = append(where, "(type='"+strings.Join(cond.Types, "' or type='")+"')")
@@ -175,6 +175,27 @@ func (sq *Sqlite3) QueryTypes(cond Conditions) ([]string, error) {
 	rows, err := sq.Query(
 		[]string{"distinct(type)"}, cond,
 		&Order{GroupBy: []string{"type"}, OrderBy: []string{"type"}},
+	)
+	if err != nil {
+		return types, fmt.Errorf("select caused: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var value string
+		if err = rows.Scan(&value); err != nil {
+			return types, err
+		}
+		types = append(types, value)
+	}
+	return types, nil
+}
+
+// QueryTypes creates list of distinct years from which have records
+func (sq *Sqlite3) QueryWorkoutTypes(cond Conditions) ([]string, error) {
+	types := []string{}
+	rows, err := sq.Query(
+		[]string{"distinct(workouttype)"}, cond,
+		&Order{GroupBy: []string{"workouttype"}, OrderBy: []string{"workouttype"}},
 	)
 	if err != nil {
 		return types, fmt.Errorf("select caused: %w", err)

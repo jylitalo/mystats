@@ -66,7 +66,13 @@ type ActivitySummary struct {
 }
 
 func (as *ActivitySummary) WorkoutType() string {
-	options := []string{"", "Race", "Long Run", "Workout"}
+	options := []string{
+		"Default",
+		"Run Race", "Long Run", "Run Workout",
+		"Unknown (4)", "Unknown (5)", "Unknown (6)", "Unknown (7)", "Unknown (8)", "Unknown (9)",
+		"Default", // for Ride
+		"Bicycle Race", "Ride Workout",
+	}
 	if as.WorkoutTypeId < len(options) {
 		return options[as.WorkoutTypeId]
 	}

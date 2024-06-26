@@ -19,7 +19,7 @@ func TestSqlQuery(t *testing.T) {
 			"select f1,f2 from mystats where (type='r1' or type='r2') group by f3 order by f3 desc",
 		},
 		{
-			"order", []string{"k1", "k2"}, Conditions{Types: []string{"c1"}, Workouts: []string{"c3"}},
+			"order", []string{"k1", "k2"}, Conditions{Types: []string{"c1"}, WorkoutTypes: []string{"c3"}},
 			&Order{GroupBy: []string{"k3", "k4"}, OrderBy: []string{"k5", "k6"}, Limit: 7},
 			"select k1,k2 from mystats where (workouttype='c3') and (type='c1') group by k3,k4 order by k5,k6 limit 7",
 		},

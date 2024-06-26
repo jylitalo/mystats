@@ -8,11 +8,11 @@ import (
 	"github.com/jylitalo/mystats/storage"
 )
 
-func Top(db Storage, measurement, period string, types []string, limit int, years []int) ([]string, [][]string, error) {
+func Top(db Storage, measurement, period string, types, workoutTypes []string, limit int, years []int) ([]string, [][]string, error) {
 	results := [][]string{}
 	rows, err := db.Query(
 		[]string{measurement + " as total", "year", period},
-		storage.Conditions{Types: types, Years: years},
+		storage.Conditions{Types: types, WorkoutTypes: workoutTypes, Years: years},
 		&storage.Order{
 			GroupBy: []string{"year", period},
 			OrderBy: []string{"total desc", "year desc", period + " desc"},

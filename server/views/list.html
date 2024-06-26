@@ -10,6 +10,7 @@
 
     </div>
     {{ template "types" . }}
+    {{ template "workouttypes" . }}
     {{ template "years" . }}
 </form>
 {{ end }}
@@ -30,7 +31,11 @@
                 {{ if ne $trimmed "" }}
                 <tr>
                     {{ range $idx, $col := $row }}
+                        {{ if eq $idx 7 }}
+                        <td><a href="{{ $col }}">{{ $col }}</a></td>
+                        {{ else }}
                         <td{{ if eq $idx 1 }} class="name"{{ end }}>{{ $col }}</td>
+                        {{ end }}
                     {{ end }}
                 </tr>
                 {{ end }}

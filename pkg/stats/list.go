@@ -10,8 +10,8 @@ import (
 func List(db Storage, types, workouts []string, years []int) ([]string, [][]string, error) {
 	o := []string{"year", "month", "day"}
 	rows, err := db.Query(
-		[]string{"year", "month", "day", "name", "distance", "elevation", "movingtime"},
-		storage.Conditions{Workouts: workouts, Types: types, Years: years},
+		[]string{"year", "month", "day", "name", "distance", "elevation", "movingtime", "type", "workouttype", "stravaid"},
+		storage.Conditions{WorkoutTypes: workouts, Types: types, Years: years},
 		&storage.Order{GroupBy: o, OrderBy: o},
 	)
 	if err != nil {
@@ -20,10 +20,10 @@ func List(db Storage, types, workouts []string, years []int) ([]string, [][]stri
 	defer rows.Close()
 	results := [][]string{}
 	for rows.Next() {
-		var year, month, day, movingTime int
+		var year, month, day, movingTime, stravaID int
 		var distance, elevation float64
-		var name string
-		err = rows.Scan(&year, &month, &day, &name, &distance, &elevation, &movingTime)
+		var name, typeName, workoutType string
+		err = rows.Scan(&year, &month, &day, &name, &distance, &elevation, &movingTime, &typeName, &workoutType, &stravaID)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -31,7 +31,8 @@ func List(db Storage, types, workouts []string, years []int) ([]string, [][]stri
 			fmt.Sprintf("%2d.%2d.%d", day, month, year), name,
 			fmt.Sprintf("%.0f", math.Round(distance/1000)), fmt.Sprintf("%.0f", elevation),
 			fmt.Sprintf("%2d:%02d:%02d", movingTime/3600, movingTime/60%60, movingTime%60),
+			typeName, workoutType, fmt.Sprintf("https://strava.com/activities/%d", stravaID),
 		})
 	}
-	return []string{"Date", "Name", "Distance (km)", "Elevation (m)", "Time"}, results, nil
+	return []string{"Date", "Name", "Distance (km)", "Elevation (m)", "Time", "Type", "Workout Type", "Link"}, results, nil
 }

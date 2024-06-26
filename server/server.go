@@ -21,6 +21,7 @@ import (
 type Storage interface {
 	Query(fields []string, cond storage.Conditions, order *storage.Order) (*sql.Rows, error)
 	QueryTypes(cond storage.Conditions) ([]string, error)
+	QueryWorkoutTypes(cond storage.Conditions) ([]string, error)
 	QueryYears(cond storage.Conditions) ([]int, error)
 }
 
@@ -101,6 +102,16 @@ func selectedTypes(types map[string]bool) []string {
 	return checked
 }
 
+func selectedWorkoutTypes(types map[string]bool) []string {
+	checked := []string{}
+	for k, v := range types {
+		if v {
+			checked = append(checked, k)
+		}
+	}
+	return checked
+}
+
 func selectedYears(years map[int]bool) []int {
 	checked := []int{}
 	for k, v := range years {
@@ -119,6 +130,20 @@ func typeValues(values url.Values) (map[string]bool, error) {
 	for k, v := range values {
 		if strings.HasPrefix(k, "type_") {
 			tv := strings.ReplaceAll(k[5:], "_", " ")
+			types[tv] = (len(tv) > 0 && v[0] == "on")
+		}
+	}
+	return types, nil
+}
+
+func workoutTypeValues(values url.Values) (map[string]bool, error) {
+	if values == nil {
+		return nil, errors.New("no workoutType values given")
+	}
+	types := map[string]bool{}
+	for k, v := range values {
+		if strings.HasPrefix(k, "wt_") {
+			tv := strings.ReplaceAll(k[3:], "_", " ")
 			types[tv] = (len(tv) > 0 && v[0] == "on")
 		}
 	}
@@ -151,8 +176,9 @@ func Start(db Storage, selectedTypes []string, port int) error {
 
 	page := newPage()
 	types, errT := db.QueryTypes(storage.Conditions{})
+	workoutTypes, errW := db.QueryWorkoutTypes(storage.Conditions{})
 	years, errY := db.QueryYears(storage.Conditions{})
-	if err := errors.Join(errT, errY); err != nil {
+	if err := errors.Join(errT, errW, errY); err != nil {
 		return err
 	}
 	// it is faster to first mark everything false and afterwards change selected one to true,
@@ -166,6 +192,11 @@ func Start(db Storage, selectedTypes []string, port int) error {
 		page.List.Form.Types[t] = true
 		page.Plot.Form.Types[t] = true
 		page.Top.Form.Types[t] = true
+	}
+	for _, t := range workoutTypes {
+		page.List.Form.WorkoutTypes[t] = true
+		page.Plot.Form.WorkoutTypes[t] = true
+		page.Top.Form.WorkoutTypes[t] = true
 	}
 	for _, y := range years {
 		page.List.Form.Years[y] = true
@@ -186,12 +217,14 @@ func indexGet(page *Page, db Storage) func(c echo.Context) error {
 	return func(c echo.Context) error {
 		var errL, errT error
 		pf := &page.Plot.Form
+		errP := page.Plot.render(db, pf.Types, pf.WorkoutTypes, pf.EndMonth, pf.EndDay, pf.Years)
 		types := selectedTypes(pf.Types)
-		errP := page.Plot.render(db, pf.Types, pf.EndMonth, pf.EndDay, pf.Years)
-		page.List.Data.Headers, page.List.Data.Rows, errL = stats.List(db, types, page.List.Form.Workouts, nil)
+		workoutTypes := selectedWorkoutTypes(pf.WorkoutTypes)
+		years := selectedYears(pf.Years)
+		page.List.Data.Headers, page.List.Data.Rows, errL = stats.List(db, types, workoutTypes, years)
 		tf := &page.Top.Form
 		td := &page.Top.Data
-		td.Headers, td.Rows, errT = stats.Top(db, tf.measurement, tf.period, types, tf.limit, nil)
+		td.Headers, td.Rows, errT = stats.Top(db, tf.measurement, tf.period, types, workoutTypes, tf.limit, years)
 		return errors.Join(errP, errL, errT, c.Render(200, "index", page))
 	}
 }

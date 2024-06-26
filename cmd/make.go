@@ -17,6 +17,7 @@ import (
 type Storage interface {
 	Query(fields []string, cond storage.Conditions, order *storage.Order) (*sql.Rows, error)
 	QueryTypes(cond storage.Conditions) ([]string, error)
+	QueryWorkoutTypes(cond storage.Conditions) ([]string, error)
 	QueryYears(cond storage.Conditions) ([]int, error)
 	Close() error
 }
