@@ -13,19 +13,27 @@ import (
 
 type testDB struct{}
 
-func (t *testDB) Query(fields []string, cond storage.Conditions, order *storage.Order) (*sql.Rows, error) {
+func (t *testDB) QueryBestEffort(fields []string, distance string, order *storage.Order) (*sql.Rows, error) {
 	return nil, nil
 }
 
-func (t *testDB) QueryTypes(cond storage.Conditions) ([]string, error) {
+func (t *testDB) QueryBestEffortDistances() ([]string, error) {
 	return nil, nil
 }
 
-func (t *testDB) QueryWorkoutTypes(cond storage.Conditions) ([]string, error) {
+func (t *testDB) QuerySummary(fields []string, cond storage.SummaryConditions, order *storage.Order) (*sql.Rows, error) {
 	return nil, nil
 }
 
-func (t *testDB) QueryYears(cond storage.Conditions) ([]int, error) {
+func (t *testDB) QueryTypes(cond storage.SummaryConditions) ([]string, error) {
+	return nil, nil
+}
+
+func (t *testDB) QueryWorkoutTypes(cond storage.SummaryConditions) ([]string, error) {
+	return nil, nil
+}
+
+func (t *testDB) QueryYears(cond storage.SummaryConditions) ([]int, error) {
 	return nil, nil
 }
 

@@ -1,0 +1,55 @@
+{{ block "best-tab" . }}
+{{ template "best-form" .Form }}
+<hr />
+{{ template "best-data" .Data }}
+{{ end }}
+
+{{ block "best-form" . }}
+<form hx-swap="outerHTML" hx-target="#best-data" hx-post="/best">
+    <div id="limit">
+
+    </div>
+    {{ template "bename" . }}
+</form>
+{{ end }}
+
+{{ block "bename" . }}
+<div id="bename">
+    Best Efforts:
+    {{ range $b, $v := .Distances }}
+    <input type="checkbox" name="be_{{ esc $b }}"{{ if $v }} checked{{ end }} hx-swap="outerHTML" hx-target="#best-data" hx-post="/best"><label>{{ $b }}</label>
+    {{ end }}
+</div>
+{{ end }}
+
+{{ block "best-data" . }}
+<div id="best-data">
+    {{ range $table := .Data }}
+    <table>
+        <thead>
+            <tr>
+            {{ range $s := $table.Headers }}
+            <th>{{ $s }}</th>
+            {{ end }}
+        </tr>
+        </thead>
+        <tbody>
+            {{ range $row := $table.Rows }}
+                {{ $trimmed := joined $row }}
+                {{ if ne $trimmed "" }}
+                <tr>
+                    {{ range $idx, $col := $row }}
+                        {{ if eq $idx 3 }}
+                        <td><a href="{{ $col }}">{{ $col }}</a></td>
+                        {{ else }}
+                        <td{{ if eq $idx 1 }} class="name"{{ end }}>{{ $col }}</td>
+                        {{ end }}
+                    {{ end }}
+                </tr>
+                {{ end }}
+            {{ end }}
+        </tbody>
+    </table>
+    {{ end }}
+</div>
+{{ end }}
