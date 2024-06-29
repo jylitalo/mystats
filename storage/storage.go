@@ -12,7 +12,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-type Record struct {
+type SummaryRecord struct {
 	Year        int
 	Month       int
 	Day         int
@@ -25,14 +25,32 @@ type Record struct {
 	Distance    float64
 	Elevation   float64
 	MovingTime  int
+	ElapsedTime int
 }
 
-type Conditions struct {
+type BestEffortRecord struct {
+	StravaID    int64
+	Name        string
+	ElapsedTime int
+	MovingTime  int
+	Distance    int
+}
+
+type SummaryConditions struct {
 	Types        []string
 	WorkoutTypes []string
 	Years        []int
 	Month        int
 	Day          int
+}
+
+type conditions struct {
+	Types        []string
+	WorkoutTypes []string
+	Years        []int
+	Month        int
+	Day          int
+	BEName       string
 }
 
 type Order struct {
@@ -77,7 +95,7 @@ func (sq *Sqlite3) Create() error {
 	if sq.db == nil {
 		return errors.New("database is nil")
 	}
-	_, err := sq.db.Exec(`create table mystats (
+	_, errS := sq.db.Exec(`create table Summary (
 		Year        integer,
 		Month       integer,
 		Day         integer,
@@ -89,12 +107,20 @@ func (sq *Sqlite3) Create() error {
 		WorkoutType text,
 		Distance    real,
 		Elevation   real,
+		ElapsedTime integer,
 		MovingTime  integer
 	)`)
-	return err
+	_, errBE := sq.db.Exec(`create table BestEffort (
+		StravaID    integer,
+		Name        text,
+		ElapsedTime integer,
+		MovingTime  integer,
+		Distance    integer
+	)`)
+	return errors.Join(errS, errBE)
 }
 
-func (sq *Sqlite3) Insert(records []Record) error {
+func (sq *Sqlite3) InsertSummary(records []SummaryRecord) error {
 	if sq.db == nil {
 		return errors.New("database is nil")
 	}
@@ -102,7 +128,7 @@ func (sq *Sqlite3) Insert(records []Record) error {
 	if err != nil {
 		return err
 	}
-	stmt, err := tx.Prepare(`insert into mystats(Year,Month,Day,Week,StravaID,Name,Type,SportType,WorkoutType,Distance,Elevation,MovingTime) values (?,?,?,?,?,?,?,?,?,?,?,?)`)
+	stmt, err := tx.Prepare(`insert into summary(Year,Month,Day,Week,StravaID,Name,Type,SportType,WorkoutType,Distance,Elevation,ElapsedTime,MovingTime) values (?,?,?,?,?,?,?,?,?,?,?,?,?)`)
 	if err != nil {
 		return fmt.Errorf("insert caused %w", err)
 	}
@@ -111,7 +137,7 @@ func (sq *Sqlite3) Insert(records []Record) error {
 		_, err = stmt.Exec(
 			r.Year, r.Month, r.Day, r.Week, r.StravaID,
 			r.Name, r.Type, r.SportType, r.WorkoutType,
-			r.Distance, r.Elevation, r.MovingTime,
+			r.Distance, r.Elevation, r.ElapsedTime, r.MovingTime,
 		)
 		if err != nil {
 			return fmt.Errorf("statement execution caused: %w", err)
@@ -120,8 +146,34 @@ func (sq *Sqlite3) Insert(records []Record) error {
 	return tx.Commit()
 }
 
-func sqlQuery(fields []string, cond Conditions, order *Order) string {
+func (sq *Sqlite3) InsertBestEffort(records []BestEffortRecord) error {
+	if sq.db == nil {
+		return errors.New("database is nil")
+	}
+	tx, err := sq.db.Begin()
+	if err != nil {
+		return err
+	}
+	stmt, err := tx.Prepare(`insert into BestEffort(StravaID,Name,ElapsedTime,MovingTime,Distance) values (?,?,?,?,?)`)
+	if err != nil {
+		return fmt.Errorf("insert caused %w", err)
+	}
+	defer stmt.Close()
+	for _, r := range records {
+		if _, err = stmt.Exec(r.StravaID, r.Name, r.ElapsedTime, r.MovingTime, r.Distance); err != nil {
+			return fmt.Errorf("statement execution caused: %w", err)
+		}
+	}
+	return tx.Commit()
+}
+
+func sqlQuery(tables []string, fields []string, cond conditions, order *Order) string {
 	where := []string{}
+	if len(tables) > 0 {
+		for _, table := range tables[1:] {
+			where = append(where, fmt.Sprintf("%s.StravaID=%s.StravaID", tables[0], table))
+		}
+	}
 	if cond.WorkoutTypes != nil {
 		where = append(where, "(workouttype='"+strings.Join(cond.WorkoutTypes, "' or workouttype='")+"')")
 	}
@@ -137,6 +189,9 @@ func sqlQuery(fields []string, cond Conditions, order *Order) string {
 			yearStr = append(yearStr, strconv.Itoa(y))
 		}
 		where = append(where, "(year="+strings.Join(yearStr, " or year=")+")")
+	}
+	if cond.BEName != "" {
+		where = append(where, "besteffort.name='"+cond.BEName+"'")
 	}
 	condition := ""
 	if len(where) > 0 {
@@ -154,14 +209,64 @@ func sqlQuery(fields []string, cond Conditions, order *Order) string {
 			sorting += " limit " + strconv.FormatInt(int64(order.Limit), 10)
 		}
 	}
-	return fmt.Sprintf("select %s from mystats%s%s", strings.Join(fields, ","), condition, sorting)
+	return fmt.Sprintf(
+		"select %s from %s%s%s", strings.Join(fields, ","), strings.Join(tables, ","),
+		condition, sorting,
+	)
 }
 
-func (sq *Sqlite3) Query(fields []string, cond Conditions, order *Order) (*sql.Rows, error) {
+func (sq *Sqlite3) QueryBestEffort(fields []string, name string, order *Order) (*sql.Rows, error) {
 	if sq.db == nil {
 		return nil, errors.New("database is nil")
 	}
-	query := sqlQuery(fields, cond, order)
+	query := sqlQuery([]string{"besteffort", "summary"}, fields, conditions{BEName: name}, order)
+	// slog.Info("storage.Query", "query", query)
+	rows, err := sq.db.Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("%s failed: %w", query, err)
+	}
+	return rows, err
+}
+
+func (sq *Sqlite3) QueryBestEffortDistances() ([]string, error) {
+	if sq.db == nil {
+		return nil, errors.New("database is nil")
+	}
+	query := sqlQuery(
+		[]string{"besteffort"}, []string{"distinct(name)"}, conditions{},
+		&Order{OrderBy: []string{"distance desc"}},
+	)
+	// slog.Info("storage.Query", "query", query)
+	rows, err := sq.db.Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("%s failed: %w", query, err)
+	}
+	defer rows.Close()
+	benames := []string{}
+	for rows.Next() {
+		var value string
+		if err = rows.Scan(&value); err != nil {
+			return benames, err
+		}
+		benames = append(benames, value)
+	}
+	// slog.Info("QueryBestEffortDistances", "benames", benames)
+	return benames, nil
+}
+
+func (sq *Sqlite3) QuerySummary(fields []string, cond SummaryConditions, order *Order) (*sql.Rows, error) {
+	if sq.db == nil {
+		return nil, errors.New("database is nil")
+	}
+	query := sqlQuery(
+		[]string{"summary"}, fields,
+		conditions{
+			Types: cond.Types, WorkoutTypes: cond.WorkoutTypes,
+			Years: cond.Years, Month: cond.Month, Day: cond.Day,
+		},
+		order,
+	)
+	// slog.Info("storage.Query", "query", query)
 	rows, err := sq.db.Query(query)
 	if err != nil {
 		return nil, fmt.Errorf("%s failed: %w", query, err)
@@ -170,9 +275,9 @@ func (sq *Sqlite3) Query(fields []string, cond Conditions, order *Order) (*sql.R
 }
 
 // QueryTypes creates list of distinct years from which have records
-func (sq *Sqlite3) QueryTypes(cond Conditions) ([]string, error) {
+func (sq *Sqlite3) QueryTypes(cond SummaryConditions) ([]string, error) {
 	types := []string{}
-	rows, err := sq.Query(
+	rows, err := sq.QuerySummary(
 		[]string{"distinct(type)"}, cond,
 		&Order{GroupBy: []string{"type"}, OrderBy: []string{"type"}},
 	)
@@ -191,9 +296,9 @@ func (sq *Sqlite3) QueryTypes(cond Conditions) ([]string, error) {
 }
 
 // QueryTypes creates list of distinct years from which have records
-func (sq *Sqlite3) QueryWorkoutTypes(cond Conditions) ([]string, error) {
+func (sq *Sqlite3) QueryWorkoutTypes(cond SummaryConditions) ([]string, error) {
 	types := []string{}
-	rows, err := sq.Query(
+	rows, err := sq.QuerySummary(
 		[]string{"distinct(workouttype)"}, cond,
 		&Order{GroupBy: []string{"workouttype"}, OrderBy: []string{"workouttype"}},
 	)
@@ -212,9 +317,9 @@ func (sq *Sqlite3) QueryWorkoutTypes(cond Conditions) ([]string, error) {
 }
 
 // QueryYears creates list of distinct years from which have records
-func (sq *Sqlite3) QueryYears(cond Conditions) ([]int, error) {
+func (sq *Sqlite3) QueryYears(cond SummaryConditions) ([]int, error) {
 	years := []int{}
-	rows, err := sq.Query(
+	rows, err := sq.QuerySummary(
 		[]string{"distinct(year)"}, cond,
 		&Order{GroupBy: []string{"year"}, OrderBy: []string{"year desc"}},
 	)

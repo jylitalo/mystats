@@ -9,9 +9,9 @@ import (
 
 func List(db Storage, types, workouts []string, years []int) ([]string, [][]string, error) {
 	o := []string{"year", "month", "day"}
-	rows, err := db.Query(
+	rows, err := db.QuerySummary(
 		[]string{"year", "month", "day", "name", "distance", "elevation", "movingtime", "type", "workouttype", "stravaid"},
-		storage.Conditions{WorkoutTypes: workouts, Types: types, Years: years},
+		storage.SummaryConditions{WorkoutTypes: workouts, Types: types, Years: years},
 		&storage.Order{GroupBy: o, OrderBy: o},
 	)
 	if err != nil {

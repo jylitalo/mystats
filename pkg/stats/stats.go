@@ -9,8 +9,9 @@ import (
 )
 
 type Storage interface {
-	Query(fields []string, cond storage.Conditions, order *storage.Order) (*sql.Rows, error)
-	QueryYears(cond storage.Conditions) ([]int, error)
+	QueryBestEffort(fields []string, name string, order *storage.Order) (*sql.Rows, error)
+	QuerySummary(fields []string, cond storage.SummaryConditions, order *storage.Order) (*sql.Rows, error)
+	QueryYears(cond storage.SummaryConditions) ([]int, error)
 }
 
 func Stats(db Storage, measurement, period string, types, workoutTypes []string, month, day int, years []int) ([]int, [][]string, []string, error) {
@@ -21,7 +22,9 @@ func Stats(db Storage, measurement, period string, types, workoutTypes []string,
 	if _, ok := inYear[period]; !ok {
 		return nil, nil, nil, fmt.Errorf("unknown period: %s", period)
 	}
-	cond := storage.Conditions{Types: types, WorkoutTypes: workoutTypes, Month: month, Day: day, Years: years}
+	cond := storage.SummaryConditions{
+		Types: types, WorkoutTypes: workoutTypes, Month: month, Day: day, Years: years,
+	}
 	results := make([][]string, inYear[period])
 	years, err := db.QueryYears(cond)
 	if err != nil {
@@ -38,7 +41,7 @@ func Stats(db Storage, measurement, period string, types, workoutTypes []string,
 			results[idx][year] = "    "
 		}
 	}
-	rows, err := db.Query(
+	rows, err := db.QuerySummary(
 		[]string{"year", period, measurement}, cond,
 		&storage.Order{GroupBy: []string{period, "year"}, OrderBy: []string{period, "year"}},
 	)
