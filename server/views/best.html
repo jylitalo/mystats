@@ -6,17 +6,25 @@
 
 {{ block "best-form" . }}
 <form hx-swap="outerHTML" hx-target="#best-data" hx-post="/best">
-    <div id="limit">
-
-    </div>
     {{ template "bename" . }}
+    <div id="limit">
+        Items per distance:
+        <select name="limit" hx-swap="outerHTML" hx-target="#best-data" hx-post="/best">
+            <option {{ if eq .Limit 3 }} selected{{ end }}>3</option>
+            <option {{ if eq .Limit 5 }} selected{{ end }}>5</option>
+            <option {{ if eq .Limit 10 }} selected{{ end }}>10</option>
+            <option {{ if eq .Limit 100 }} selected{{ end }}>100</option>
+        </select>
+    </div>
 </form>
 {{ end }}
 
 {{ block "bename" . }}
 <div id="bename">
-    Best Efforts:
-    {{ range $b, $v := .Distances }}
+    Distances:
+    {{ $m := .Distances }}
+    {{ range $b := .InOrder }}
+    {{ $v := index $m $b }}
     <input type="checkbox" name="be_{{ esc $b }}"{{ if $v }} checked{{ end }} hx-swap="outerHTML" hx-target="#best-data" hx-post="/best"><label>{{ $b }}</label>
     {{ end }}
 </div>
@@ -39,7 +47,7 @@
                 {{ if ne $trimmed "" }}
                 <tr>
                     {{ range $idx, $col := $row }}
-                        {{ if eq $idx 3 }}
+                        {{ if eq $idx 4 }}
                         <td><a href="{{ $col }}">{{ $col }}</a></td>
                         {{ else }}
                         <td{{ if eq $idx 1 }} class="name"{{ end }}>{{ $col }}</td>

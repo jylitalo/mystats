@@ -5,6 +5,8 @@ import (
 	"log"
 	"log/slog"
 	"net/url"
+	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/jylitalo/mystats/pkg/stats"
@@ -13,11 +15,15 @@ import (
 
 type BestFormData struct {
 	Distances map[string]bool
+	InOrder   []string
+	Limit     int
 }
 
 func newBestFormData() BestFormData {
 	return BestFormData{
 		Distances: map[string]bool{},
+		InOrder:   []string{},
+		Limit:     10,
 	}
 }
 
@@ -73,14 +79,19 @@ func bestPost(page *Page, db Storage) func(c echo.Context) error {
 
 		values, errV := c.FormParams()
 		bestEfforts, errB := bestEffortValues(values)
-		if err = errors.Join(errV, errB); err != nil {
+		limit, errL := strconv.Atoi(c.FormValue("limit"))
+		if err = errors.Join(errV, errB, errL); err != nil {
 			log.Fatal(err)
 		}
 		slog.Info("POST /best", "values", values)
 		page.Best.Form.Distances = bestEfforts
 		page.Best.Data = newBestData()
-		for _, be := range selectedBestEfforts(bestEfforts) {
-			headers, rows, err := stats.Best(db, be, 3)
+		selected := selectedBestEfforts(bestEfforts)
+		for _, be := range page.Best.Form.InOrder {
+			if !slices.Contains[[]string, string](selected, be) {
+				continue
+			}
+			headers, rows, err := stats.Best(db, be, limit)
 			if err != nil {
 				return err
 			}

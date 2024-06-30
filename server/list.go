@@ -4,6 +4,7 @@ import (
 	"errors"
 	"log"
 	"log/slog"
+	"strconv"
 
 	"github.com/jylitalo/mystats/pkg/stats"
 	"github.com/labstack/echo/v4"
@@ -14,6 +15,7 @@ type ListFormData struct {
 	Types        map[string]bool
 	WorkoutTypes map[string]bool
 	Years        map[int]bool
+	Limit        int
 }
 
 func newListFormData() ListFormData {
@@ -22,6 +24,7 @@ func newListFormData() ListFormData {
 		Types:        map[string]bool{},
 		WorkoutTypes: map[string]bool{},
 		Years:        map[int]bool{},
+		Limit:        100,
 	}
 }
 
@@ -45,13 +48,14 @@ func listPost(page *Page, db Storage) func(c echo.Context) error {
 		types, errT := typeValues(values)
 		workoutTypes, errW := workoutTypeValues(values)
 		years, errY := yearValues(values)
-		if err = errors.Join(errV, errT, errW, errY); err != nil {
+		limit, errL := strconv.Atoi(c.FormValue("limit"))
+		if err = errors.Join(errV, errT, errW, errY, errL); err != nil {
 			log.Fatal(err)
 		}
 		slog.Info("POST /list", "values", values)
 		page.List.Form.Years = years
 		page.List.Data.Headers, page.List.Data.Rows, err = stats.List(
-			db, selectedTypes(types), selectedWorkoutTypes(workoutTypes), selectedYears(years),
+			db, selectedTypes(types), selectedWorkoutTypes(workoutTypes), selectedYears(years), limit,
 		)
 		return errors.Join(err, c.Render(200, "list-data", page.List.Data))
 	}

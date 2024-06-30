@@ -209,6 +209,7 @@ func Start(db Storage, selectedTypes []string, port int) error {
 		page.Top.Form.Years[y] = true
 	}
 	value := true
+	page.Best.Form.InOrder = bestEfforts
 	for _, be := range bestEfforts {
 		page.Best.Form.Distances[be] = value
 		value = false
@@ -233,7 +234,8 @@ func indexGet(page *Page, db Storage) func(c echo.Context) error {
 		types := selectedTypes(pf.Types)
 		workoutTypes := selectedWorkoutTypes(pf.WorkoutTypes)
 		years := selectedYears(pf.Years)
-		page.List.Data.Headers, page.List.Data.Rows, errL = stats.List(db, types, workoutTypes, years)
+		pld := &page.List.Data
+		pld.Headers, pld.Rows, errL = stats.List(db, types, workoutTypes, years, page.List.Form.Limit)
 		// init Top tab
 		tf := &page.Top.Form
 		td := &page.Top.Data
