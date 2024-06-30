@@ -19,10 +19,12 @@ import (
 )
 
 type Storage interface {
-	Query(fields []string, cond storage.Conditions, order *storage.Order) (*sql.Rows, error)
-	QueryTypes(cond storage.Conditions) ([]string, error)
-	QueryWorkoutTypes(cond storage.Conditions) ([]string, error)
-	QueryYears(cond storage.Conditions) ([]int, error)
+	QueryBestEffort(fields []string, name string, order *storage.Order) (*sql.Rows, error)
+	QueryBestEffortDistances() ([]string, error)
+	QuerySummary(fields []string, cond storage.SummaryConditions, order *storage.Order) (*sql.Rows, error)
+	QueryTypes(cond storage.SummaryConditions) ([]string, error)
+	QueryWorkoutTypes(cond storage.SummaryConditions) ([]string, error)
+	QueryYears(cond storage.SummaryConditions) ([]int, error)
 }
 
 type TableData struct {
@@ -39,6 +41,7 @@ func newTableData() TableData {
 
 type Page struct {
 	Plot *PlotPage
+	Best *BestPage
 	List *ListPage
 	Top  *TopPage
 }
@@ -46,6 +49,7 @@ type Page struct {
 func newPage() *Page {
 	return &Page{
 		Plot: newPlotPage(),
+		Best: newBestPage(),
 		List: newListPage(),
 		Top:  newTopPage(),
 	}
@@ -71,7 +75,7 @@ func newTemplate(path string) *Template {
 			return i - 1
 		},
 		"esc": func(s string) string {
-			return strings.ReplaceAll(s, " ", "_")
+			return strings.ReplaceAll(strings.ReplaceAll(s, " ", "_"), "/", "X")
 		},
 		"inc": func(i int) int {
 			return i + 1
@@ -84,7 +88,7 @@ func newTemplate(path string) *Template {
 		},
 	}
 	return &Template{
-		tmpl: template.Must(template.New("plot").Funcs(funcMap).ParseGlob(path)),
+		tmpl: template.Must(template.New("index").Funcs(funcMap).ParseGlob(path)),
 	}
 }
 
@@ -175,10 +179,11 @@ func Start(db Storage, selectedTypes []string, port int) error {
 	e.Static("/css", "server/css")
 
 	page := newPage()
-	types, errT := db.QueryTypes(storage.Conditions{})
-	workoutTypes, errW := db.QueryWorkoutTypes(storage.Conditions{})
-	years, errY := db.QueryYears(storage.Conditions{})
-	if err := errors.Join(errT, errW, errY); err != nil {
+	types, errT := db.QueryTypes(storage.SummaryConditions{})
+	workoutTypes, errW := db.QueryWorkoutTypes(storage.SummaryConditions{})
+	years, errY := db.QueryYears(storage.SummaryConditions{})
+	bestEfforts, errBE := db.QueryBestEffortDistances()
+	if err := errors.Join(errT, errW, errY, errBE); err != nil {
 		return err
 	}
 	// it is faster to first mark everything false and afterwards change selected one to true,
@@ -203,9 +208,16 @@ func Start(db Storage, selectedTypes []string, port int) error {
 		page.Plot.Form.Years[y] = true
 		page.Top.Form.Years[y] = true
 	}
+	value := true
+	page.Best.Form.InOrder = bestEfforts
+	for _, be := range bestEfforts {
+		page.Best.Form.Distances[be] = value
+		value = false
+	}
 	slog.Info("starting things", "page", page)
 
 	e.GET("/", indexGet(page, db))
+	e.POST("/best", bestPost(page, db))
 	e.POST("/list", listPost(page, db))
 	e.POST("/plot", plotPost(page, db))
 	e.POST("/top", topPost(page, db))
@@ -218,13 +230,27 @@ func indexGet(page *Page, db Storage) func(c echo.Context) error {
 		var errL, errT error
 		pf := &page.Plot.Form
 		errP := page.Plot.render(db, pf.Types, pf.WorkoutTypes, pf.EndMonth, pf.EndDay, pf.Years)
+		// init List tab
 		types := selectedTypes(pf.Types)
 		workoutTypes := selectedWorkoutTypes(pf.WorkoutTypes)
 		years := selectedYears(pf.Years)
-		page.List.Data.Headers, page.List.Data.Rows, errL = stats.List(db, types, workoutTypes, years)
+		pld := &page.List.Data
+		pld.Headers, pld.Rows, errL = stats.List(db, types, workoutTypes, years, page.List.Form.Limit)
+		// init Top tab
 		tf := &page.Top.Form
 		td := &page.Top.Data
 		td.Headers, td.Rows, errT = stats.Top(db, tf.measurement, tf.period, types, workoutTypes, tf.limit, years)
+		// init Best tab
+		for _, be := range selectedBestEfforts(page.Best.Form.Distances) {
+			headers, rows, err := stats.Best(db, be, 3)
+			if err != nil {
+				return err
+			}
+			page.Best.Data.Data = append(page.Best.Data.Data, TableData{
+				Headers: headers,
+				Rows:    rows,
+			})
+		}
 		return errors.Join(errP, errL, errT, c.Render(200, "index", page))
 	}
 }

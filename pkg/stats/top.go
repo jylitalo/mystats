@@ -10,9 +10,9 @@ import (
 
 func Top(db Storage, measurement, period string, types, workoutTypes []string, limit int, years []int) ([]string, [][]string, error) {
 	results := [][]string{}
-	rows, err := db.Query(
+	rows, err := db.QuerySummary(
 		[]string{measurement + " as total", "year", period},
-		storage.Conditions{Types: types, WorkoutTypes: workoutTypes, Years: years},
+		storage.SummaryConditions{Types: types, WorkoutTypes: workoutTypes, Years: years},
 		&storage.Order{
 			GroupBy: []string{"year", period},
 			OrderBy: []string{"total desc", "year desc", period + " desc"},

@@ -16,13 +16,15 @@ import (
 )
 
 type Storage interface {
-	Query(fields []string, cond storage.Conditions, order *storage.Order) (*sql.Rows, error)
-	QueryYears(cond storage.Conditions) ([]int, error)
+	QuerySummary(fields []string, cond storage.SummaryConditions, order *storage.Order) (*sql.Rows, error)
+	QueryYears(cond storage.SummaryConditions) ([]int, error)
 }
 
 func Plot(db Storage, types, workoutTypes []string, measurement string, month, day int, years []int, filename string) error {
 	tz, _ := time.LoadLocation("Europe/Helsinki")
-	cond := storage.Conditions{Types: types, WorkoutTypes: workoutTypes, Month: month, Day: day, Years: years}
+	cond := storage.SummaryConditions{
+		Types: types, WorkoutTypes: workoutTypes, Month: month, Day: day, Years: years,
+	}
 	years, err := db.QueryYears(cond)
 	if err != nil {
 		return err
@@ -36,7 +38,7 @@ func Plot(db Storage, types, workoutTypes []string, measurement string, month, d
 		totals[year] = 0
 	}
 	o := []string{"year", "month", "day"}
-	rows, err := db.Query(
+	rows, err := db.QuerySummary(
 		[]string{"year", "month", "day", "sum(" + measurement + ")"},
 		cond, &storage.Order{GroupBy: o, OrderBy: o},
 	)

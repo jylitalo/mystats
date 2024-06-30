@@ -9,6 +9,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	strava "github.com/strava/go.strava"
 )
 
 type Config struct {
@@ -83,7 +85,25 @@ func (cfg *Config) Refresh() (*Config, bool, error) {
 	return &tokens, true, nil
 }
 
-func ReadJSONs(fnames []string) ([]ActivitySummary, error) {
+func ReadBestEffortJSONs(fnames []string) ([]strava.BestEffort, error) {
+	efforts := []strava.BestEffort{}
+	for _, fname := range fnames {
+		body, err := os.ReadFile(filepath.Clean(fname))
+		if err != nil {
+			return efforts, err
+		}
+		activity := strava.ActivityDetailed{}
+		if err = json.Unmarshal(body, &activity); err != nil {
+			return efforts, err
+		}
+		for _, be := range activity.BestEfforts {
+			efforts = append(efforts, *be)
+		}
+	}
+	return efforts, nil
+}
+
+func ReadSummaryJSONs(fnames []string) ([]ActivitySummary, error) {
 	ids := map[int64]string{}
 	activities := []ActivitySummary{}
 	for _, fname := range fnames {

@@ -11,11 +11,15 @@
     <body>
         <div class="tab">
             <button class="tablinks" onclick="openTab(event, 'Plot')" id="defaultOpen">Plot</button>
+            <button class="tablinks" onclick="openTab(event, 'Best')">Best Running Efforts</button>
             <button class="tablinks" onclick="openTab(event, 'List')">List</button>
             <button class="tablinks" onclick="openTab(event, 'Top')">Top</button>
         </div>
         <div id="Plot" class="tabcontent">
             {{ template "plot-tab" .Plot }}
+        </div>
+        <div id="Best" class="tabcontent">
+            {{ template "best-tab" .Best }}
         </div>
         <div id="List" class="tabcontent">
             {{ template "list-tab" .List }}
@@ -76,7 +80,6 @@
 <div id="years">
     Years:
     {{ range $y, $v := .Years }}
-        <input type="checkbox" name="year_{{ $y }}"{{ if $v }} checked{{ end }} hx-swap="outerHTML" hx-target="#{{ $name }}-data" hx-post="/{{ $name }}"><label>{{ $y }}</label>
-    {{ end }}
+        <input type="checkbox" name="year_{{ $y }}"{{ if $v }} checked{{ end }} hx-swap="outerHTML" hx-target="#{{ $name }}-data" hx-post="/{{ $name }}"><label>{{ $y }}</label>    {{ end }}
 </div>
 {{ end }}

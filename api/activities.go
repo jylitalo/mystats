@@ -1,8 +1,11 @@
 package api
 
 // Copied from https://github.com/strava/go.strava/blob/99ebe972ba16ef3e1b1e5f62003dae3ac06f3adb/activities.go
-// so that we were able to add WorkoutType into ActivitySummary struct.
-// workout_type is documented attribute in Strava API v3, but for some reason it is missing from go.strava
+// so that we were able to add SportType and WorkoutType into ActivitySummary struct.
+// sport_type and workout_type are documented attributes in Strava API v3,
+// but for some reason it is missing from go.strava
+// sport_type is string value that can be same as type or something newer. Known exceptions
+// - sport_type: TrailRun has type: Run
 // workout_type is integer value that needs separate transformation into string.
 import (
 	"fmt"
@@ -77,4 +80,9 @@ func (as *ActivitySummary) WorkoutType() string {
 		return options[as.WorkoutTypeId]
 	}
 	return fmt.Sprintf("Unknown (%d)", as.WorkoutTypeId)
+}
+
+func NewActivitiesService(client *Client) *strava.ActivitiesService {
+	stravaClient := strava.NewClient(client.token, client.httpClient)
+	return strava.NewActivitiesService(stravaClient)
 }

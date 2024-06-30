@@ -15,10 +15,12 @@ import (
 )
 
 type Storage interface {
-	Query(fields []string, cond storage.Conditions, order *storage.Order) (*sql.Rows, error)
-	QueryTypes(cond storage.Conditions) ([]string, error)
-	QueryWorkoutTypes(cond storage.Conditions) ([]string, error)
-	QueryYears(cond storage.Conditions) ([]int, error)
+	QueryBestEffort(fields []string, name string, order *storage.Order) (*sql.Rows, error)
+	QueryBestEffortDistances() ([]string, error)
+	QuerySummary(fields []string, cond storage.SummaryConditions, order *storage.Order) (*sql.Rows, error)
+	QueryTypes(cond storage.SummaryConditions) ([]string, error)
+	QueryWorkoutTypes(cond storage.SummaryConditions) ([]string, error)
+	QueryYears(cond storage.SummaryConditions) ([]int, error)
 	Close() error
 }
 
@@ -60,7 +62,7 @@ func skipDB(db *storage.Sqlite3, fnames []string) bool {
 func makeDB(update bool) (Storage, error) {
 	slog.Info("Fetch activities from Strava")
 	if update {
-		if err := fetch(); err != nil {
+		if err := fetch(false); err != nil {
 			return nil, err
 		}
 	}
@@ -75,15 +77,15 @@ func makeDB(update bool) (Storage, error) {
 		return db, nil
 	}
 	slog.Info("Making database")
-	activities, err := api.ReadJSONs(fnames)
+	activities, err := api.ReadSummaryJSONs(fnames)
 	if err != nil {
 		return nil, err
 	}
-	dbActivities := []storage.Record{}
+	dbActivities := []storage.SummaryRecord{}
 	for _, activity := range activities {
 		t := activity.StartDateLocal
 		year, week := t.ISOWeek()
-		dbActivities = append(dbActivities, storage.Record{
+		dbActivities = append(dbActivities, storage.SummaryRecord{
 			StravaID:    activity.Id,
 			Year:        year,
 			Month:       int(t.Month()),
@@ -98,9 +100,28 @@ func makeDB(update bool) (Storage, error) {
 			MovingTime:  activity.MovingTime,
 		})
 	}
+	fnames, err = activitiesFiles()
+	if err != nil {
+		return nil, err
+	}
+	detailed, err := api.ReadBestEffortJSONs(fnames)
+	if err != nil {
+		return nil, err
+	}
+	dbEfforts := []storage.BestEffortRecord{}
+	for _, activity := range detailed {
+		dbEfforts = append(dbEfforts, storage.BestEffortRecord{
+			StravaID:    activity.EffortSummary.Activity.Id,
+			Name:        activity.EffortSummary.Name,
+			MovingTime:  activity.EffortSummary.MovingTime,
+			ElapsedTime: activity.EffortSummary.ElapsedTime,
+			Distance:    int(activity.Distance),
+		})
+	}
 	errR := db.Remove()
 	errO := db.Open()
 	errC := db.Create()
-	errI := db.Insert(dbActivities)
-	return db, errors.Join(errR, errO, errC, errI)
+	errI := db.InsertSummary(dbActivities)
+	errBE := db.InsertBestEffort(dbEfforts)
+	return db, errors.Join(errR, errO, errC, errI, errBE)
 }
