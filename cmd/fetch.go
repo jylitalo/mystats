@@ -49,7 +49,11 @@ func fetch(best_efforts bool) error {
 	}
 	_, err = saveActivities(call, prior)
 	if err == nil && best_efforts {
-		return fetchBestEfforts(client)
+		err = fetchBestEfforts(client)
+	}
+	if err != nil && api.IsRateLimitExceeded(err) {
+		slog.Warn("Strava API Rate Limit Exceeded")
+		return nil
 	}
 	return err
 }
@@ -73,7 +77,7 @@ func fetchBestEfforts(client *api.Client) error {
 	}
 	rows, err := db.QuerySummary(
 		[]string{"StravaID"},
-		storage.SummaryConditions{Types: []string{"Run"}},
+		storage.SummaryConditions{},
 		&storage.Order{OrderBy: []string{"StravaID desc"}},
 	)
 	if err != nil {
@@ -178,6 +182,9 @@ func saveActivities(call *api.CurrentAthleteListActivitiesCall, prior int) (int,
 		call = call.Page(page)
 		activities, err := call.Do()
 		if err != nil {
+			if api.IsRateLimitExceeded(err) {
+				return page, err
+			}
 			if page == 1 {
 				return page, fmt.Errorf("run mystats configure --client_id=... --client_secret=... first. err=%w", err)
 			}
