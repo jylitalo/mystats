@@ -24,6 +24,15 @@
             {{ end }}
         </select>
     </div>
+    <div id="plotPeriod">
+        Period in table:
+        <select hx-swap="outerHTML" hx-target="#plot-data" hx-post="/plot" name="Period">
+            {{ $period := .Period}}
+            {{ range $p := .PeriodOptions }}
+                <option value="{{ $p }}"{{ if eq $p $period }}  selected{{ end }}>{{ $p }}</option>
+            {{ end }}
+        </select>
+    </div>
     {{ template "types" . }}
     {{ template "workouttypes" . }}
     {{ template "years" . }}
@@ -57,11 +66,12 @@
       </tr>
     </thead>
     <tbody>
-        {{ range $month, $line := .Stats }}
+        {{ $period := .Period }}
+        {{ range $t, $line := .Stats }}
             {{ $trimmed := joined $line }}
             {{ if ne $trimmed "" }}
             <tr>
-                <th>{{ $m := inc $month }}{{ month $m }}</th>
+                <th>{{ $t2 := inc $t }}{{ if eq $period "month" }}{{ month $t2 }}{{ else }}{{ $t2 }}{{ end }}</th>
                 {{ range $col := $line }}
                     <td>{{ $col }}</td>
                 {{ end }}

@@ -229,7 +229,9 @@ func indexGet(page *Page, db Storage) func(c echo.Context) error {
 	return func(c echo.Context) error {
 		var errL, errT error
 		pf := &page.Plot.Form
-		errP := page.Plot.render(db, pf.Types, pf.WorkoutTypes, pf.EndMonth, pf.EndDay, pf.Years)
+		errP := page.Plot.render(
+			db, pf.Types, pf.WorkoutTypes, pf.EndMonth, pf.EndDay, pf.Years, pf.Period,
+		)
 		// init List tab
 		types := selectedTypes(pf.Types)
 		workoutTypes := selectedWorkoutTypes(pf.WorkoutTypes)

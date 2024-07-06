@@ -45,7 +45,7 @@ func TestTemplateRender(t *testing.T) {
 	p.Plot.Data.stats = func(db stats.Storage, measurement, period string, types, workoutTypes []string, month, day int, years []int) ([]int, [][]string, []string, error) {
 		return nil, nil, nil, nil
 	}
-	err := p.Plot.render(&testDB{}, map[string]bool{"Run": true}, nil, 6, 12, map[int]bool{2024: true})
+	err := p.Plot.render(&testDB{}, map[string]bool{"Run": true}, nil, 6, 12, map[int]bool{2024: true}, "month")
 	if err != nil {
 		t.Error(err)
 	}
