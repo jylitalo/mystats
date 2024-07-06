@@ -98,6 +98,7 @@ func makeDB(update bool) (Storage, error) {
 			Distance:    activity.Distance,
 			Elevation:   activity.TotalElevationGain,
 			MovingTime:  activity.MovingTime,
+			ElapsedTime: activity.ElapsedTime,
 		})
 	}
 	fnames, err = activitiesFiles()
