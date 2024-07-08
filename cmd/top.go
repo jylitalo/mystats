@@ -71,7 +71,7 @@ func topCmd(types []string) *cobra.Command {
 	}
 	cmd.Flags().String("format", "csv", "output format (csv, table)")
 	cmd.Flags().Int("limit", 10, "number of entries")
-	cmd.Flags().String("measure", "sum(distance)", "measurement type (sum(distance), max(elevation), ...)")
+	cmd.Flags().String("measure", "distance", "measurement type (distance, elevation, time)")
 	cmd.Flags().String("period", "week", "time period (week, month)")
 	cmd.Flags().StringSlice("type", types, "sport types (run, trail run, ...)")
 	cmd.Flags().Bool("update", true, "update database")
