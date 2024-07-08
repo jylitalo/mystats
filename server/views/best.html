@@ -8,7 +8,7 @@
 <form hx-swap="outerHTML" hx-target="#best-data" hx-post="/best">
     {{ template "bename" . }}
     <div id="limit">
-        Items per distance:
+        <b>Items per distance:</b>
         <select name="limit" hx-swap="outerHTML" hx-target="#best-data" hx-post="/best">
             <option {{ if eq .Limit 3 }} selected{{ end }}>3</option>
             <option {{ if eq .Limit 5 }} selected{{ end }}>5</option>
@@ -21,7 +21,7 @@
 
 {{ block "bename" . }}
 <div id="bename">
-    Distances:
+    <b>Distances:</b>
     {{ $m := .Distances }}
     {{ range $b := .InOrder }}
     {{ $v := index $m $b }}
@@ -50,7 +50,7 @@
                         {{ if eq $idx 5 }}
                         <td><a href="{{ $col }}">{{ $col }}</a></td>
                         {{ else }}
-                        <td{{ if eq $idx 1 }} class="name"{{ end }}>{{ $col }}</td>
+                        <td{{ if eq $idx 1 }} class="text"{{ end }}>{{ $col }}</td>
                         {{ end }}
                     {{ end }}
                 </tr>

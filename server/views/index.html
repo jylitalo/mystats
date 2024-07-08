@@ -58,7 +58,7 @@
 {{ block "types" . }}
 {{ $name := .Name }}
 <div id="types">
-    Types:
+    <b>Types:</b>
     {{ range $t, $v := .Types }}
         <input type="checkbox" name="type_{{ esc $t }}"{{ if $v }} checked{{ end }} hx-swap="outerHTML" hx-target="#{{ $name }}-data" hx-post="/{{ $name }}"><label>{{ $t }}</label>
     {{ end }}
@@ -68,7 +68,7 @@
 {{ block "workouttypes" . }}
 {{ $name := .Name }}
 <div id="workouttypes">
-    Workout:
+    <b>Workout:</b>
     {{ range $t, $v := .WorkoutTypes }}
         <input type="checkbox" name="wt_{{ esc $t }}"{{ if $v }} checked{{ end }} hx-swap="outerHTML" hx-target="#{{ $name }}-data" hx-post="/{{ $name }}"><label>{{ $t }}</label>
     {{ end }}
@@ -78,7 +78,7 @@
 {{ block "years" . }}
 {{ $name := .Name }}
 <div id="years">
-    Years:
+    <b>Years:</b>
     {{ range $y, $v := .Years }}
         <input type="checkbox" name="year_{{ $y }}"{{ if $v }} checked{{ end }} hx-swap="outerHTML" hx-target="#{{ $name }}-data" hx-post="/{{ $name }}"><label>{{ $y }}</label>    {{ end }}
 </div>

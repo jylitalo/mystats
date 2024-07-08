@@ -9,8 +9,8 @@
     {{ template "types" . }}
     {{ template "workouttypes" . }}
     {{ template "years" . }}
-    <div id="limit">
-        Number of activities:
+    <div id="list-limit">
+        <b>Number of activities:</b>
         <select name="limit" hx-swap="outerHTML" hx-target="#list-data" hx-post="/list">
             <option{{ if eq .Limit 10 }} selected{{ end }}>10</option>
             <option{{ if eq .Limit 20 }} selected{{ end }}>20</option>
@@ -26,7 +26,7 @@
         <thead>
             <tr>
             {{ range $s := .Headers }}
-            <th>{{ $s }}</th>
+            <th class="text">{{ $s }}</th>
             {{ end }}
         </tr>
         </thead>
@@ -39,7 +39,7 @@
                         {{ if eq $idx 7 }}
                         <td><a href="{{ $col }}">{{ $col }}</a></td>
                         {{ else }}
-                        <td{{ if eq $idx 1 }} class="name"{{ end }}>{{ $col }}</td>
+                        <td{{ if or (eq $idx 1) (eq $idx 6) }} class="text"{{ end }}>{{ $col }}</td>
                         {{ end }}
                     {{ end }}
                 </tr>

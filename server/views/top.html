@@ -9,6 +9,32 @@
     {{ template "types" . }}
     {{ template "workouttypes" . }}
     {{ template "years" . }}
+    <div id="top-period">
+        <b>Period in table:</b>
+        <select hx-swap="outerHTML" hx-target="#top-data" hx-post="/top" name="Period">
+            {{ $period := .Period}}
+            {{ range $p := .PeriodOptions }}
+                <option value="{{ $p }}"{{ if eq $p $period }}  selected{{ end }}>{{ $p }}</option>
+            {{ end }}
+        </select>
+    </div>
+    <div id="top-measure">
+        <b>Measure:</b>
+        <select hx-swap="outerHTML" hx-target="#top-data" hx-post="/top" name="Measure">
+            {{ $measure := .Measure }}
+            {{ range $m := .MeasureOptions }}
+                <option value="{{ $m }}"{{ if eq $m $measure }}  selected{{ end }}>{{ $m }}</option>
+            {{ end }}
+        </select>
+    </div>
+    <div id="top-limit">
+        <b>Number of activities:</b>
+        <select name="limit" hx-swap="outerHTML" hx-target="#top-data" hx-post="/top">
+            <option{{ if eq .Limit 10 }} selected{{ end }}>10</option>
+            <option{{ if eq .Limit 20 }} selected{{ end }}>20</option>
+            <option{{ if eq .Limit 100 }} selected{{ end }}>100</option>
+        </select>
+    </div>
 </form>
 {{ end }}
 
@@ -17,18 +43,18 @@
     <table>
         <thead>
             <tr>
-            {{ range $s := .Headers }}
-            <th>{{ $s }}</th>
+            {{ range $s := .Data.Headers }}
+            <th class="text">{{ $s }}</th>
             {{ end }}
         </tr>
         </thead>
         <tbody>
-            {{ range $row := .Rows }}
+            {{ range $row := .Data.Rows }}
                 {{ $trimmed := joined $row }}
                 {{ if ne $trimmed "" }}
                 <tr>
-                    {{ range $col := $row }}
-                        <td>{{ $col }}</td>
+                    {{ range $idx, $col := $row }}
+                        <td{{ if eq $idx 2 }} class="text"{{ end }}>{{ $col }}</td>
                     {{ end }}
                 </tr>
                 {{ end }}

@@ -15,46 +15,51 @@ import (
 )
 
 type PlotFormData struct {
-	Name          string
-	EndMonth      int
-	EndDay        int
-	Period        string
-	PeriodOptions []string
-	Types         map[string]bool
-	WorkoutTypes  map[string]bool
-	Years         map[int]bool
+	Name           string
+	EndMonth       int
+	EndDay         int
+	Measure        string
+	MeasureOptions []string
+	Period         string
+	PeriodOptions  []string
+	Types          map[string]bool
+	WorkoutTypes   map[string]bool
+	Years          map[int]bool
 }
 
 func newPlotFormData() PlotFormData {
 	t := time.Now()
 	return PlotFormData{
-		Name:          "plot",
-		EndMonth:      int(t.Month()),
-		EndDay:        t.Day(),
-		Period:        "month",
-		PeriodOptions: []string{"month", "week"},
-		Types:         map[string]bool{},
-		WorkoutTypes:  map[string]bool{},
-		Years:         map[int]bool{},
+		Name:           "plot",
+		EndMonth:       int(t.Month()),
+		EndDay:         t.Day(),
+		Measure:        "distance",
+		MeasureOptions: []string{"distance", "elevation", "time"},
+		Period:         "month",
+		PeriodOptions:  []string{"month", "week"},
+		Types:          map[string]bool{},
+		WorkoutTypes:   map[string]bool{},
+		Years:          map[int]bool{},
 	}
 }
 
 type PlotData struct {
-	Years       []int
-	Measurement string
-	Stats       [][]string
-	Totals      []string
-	Filename    string
-	Period      string
-	plot        func(db plot.Storage, types, workoutTypes []string, measurement string, month, day int, years []int, filename string) error
-	stats       func(db stats.Storage, measurement, period string, types, workoutTypes []string, month, day int, years []int) ([]int, [][]string, []string, error)
+	Years    []int
+	Measure  string
+	Stats    [][]string
+	Totals   []string
+	Filename string
+	Period   string
+	plot     func(db plot.Storage, types, workoutTypes []string, measure string, month, day int, years []int, filename string) error
+	stats    func(db stats.Storage, measure, period string, types, workoutTypes []string, month, day int, years []int) ([]int, [][]string, []string, error)
 }
 
 func newPlotData() PlotData {
 	return PlotData{
-		Measurement: "distance",
-		plot:        plot.Plot,
-		stats:       stats.Stats,
+		Measure: "distance",
+		Period:  "month",
+		plot:    plot.Plot,
+		stats:   stats.Stats,
 	}
 }
 
@@ -83,15 +88,19 @@ func (p *PlotPage) render(
 	d := &p.Data
 	d.Filename = "cache/plot-" + uuid.NewString() + ".png"
 	err := d.plot(
-		db, checkedTypes, checkedWorkoutTypes, d.Measurement, month, day, checkedYears,
+		db, checkedTypes, checkedWorkoutTypes, d.Measure, month, day, checkedYears,
 		"server/"+d.Filename,
 	)
 	if err != nil {
 		slog.Error("failed to plot", "err", err)
 		return err
 	}
+	measure := d.Measure
+	if measure == "time" {
+		measure = "elapsedtime"
+	}
 	d.Years, d.Stats, d.Totals, err = d.stats(
-		db, "sum("+d.Measurement+")", period, checkedTypes, checkedWorkoutTypes,
+		db, "sum("+measure+")", period, checkedTypes, checkedWorkoutTypes,
 		month, day, checkedYears,
 	)
 	if err != nil {
@@ -104,7 +113,10 @@ func plotPost(page *Page, db Storage) func(c echo.Context) error {
 	return func(c echo.Context) error {
 		month, errM := strconv.Atoi(c.FormValue("EndMonth"))
 		day, errD := strconv.Atoi(c.FormValue("EndDay"))
+		page.Plot.Data.Measure = c.FormValue("Measure")
+		page.Plot.Form.Measure = page.Plot.Data.Measure
 		page.Plot.Data.Period = c.FormValue("Period")
+		page.Plot.Form.Period = page.Plot.Data.Period
 		values, errV := c.FormParams()
 		types, errT := typeValues(values)
 		workoutTypes, errW := workoutTypeValues(values)
