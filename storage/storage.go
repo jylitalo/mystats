@@ -174,10 +174,10 @@ func sqlQuery(tables []string, fields []string, cond conditions, order *Order) s
 			where = append(where, fmt.Sprintf("%s.StravaID=%s.StravaID", tables[0], table))
 		}
 	}
-	if cond.WorkoutTypes != nil {
+	if len(cond.WorkoutTypes) > 0 {
 		where = append(where, "(workouttype='"+strings.Join(cond.WorkoutTypes, "' or workouttype='")+"')")
 	}
-	if cond.Types != nil {
+	if len(cond.Types) > 0 {
 		where = append(where, "(type='"+strings.Join(cond.Types, "' or type='")+"')")
 	}
 	if cond.Month > 0 && cond.Day > 0 {
