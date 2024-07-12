@@ -246,7 +246,7 @@ func indexGet(page *Page, db Storage) func(c echo.Context) error {
 		)
 		// init Best tab
 		for _, be := range selectedBestEfforts(page.Best.Form.Distances) {
-			headers, rows, err := stats.Best(db, be, 3)
+			headers, rows, err := stats.Best(db, be, 10)
 			if err != nil {
 				return err
 			}
