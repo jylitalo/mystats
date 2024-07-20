@@ -29,7 +29,7 @@ func List(db Storage, types, workouts []string, years []int, limit int) ([]strin
 		}
 		results = append(results, []string{
 			fmt.Sprintf("%2d.%2d.%d", day, month, year), name,
-			fmt.Sprintf("%.0f", math.Round(distance/1000)), fmt.Sprintf("%.0f", elevation),
+			fmt.Sprintf("%.1f", math.Round(distance/1000)), fmt.Sprintf("%.0f", elevation),
 			fmt.Sprintf("%2d:%02d:%02d", movingTime/3600, movingTime/60%60, movingTime%60),
 			typeName, workoutType, fmt.Sprintf("https://strava.com/activities/%d", stravaID),
 		})

@@ -4,14 +4,28 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/jylitalo/mystats/storage"
 )
 
-func Top(db Storage, measurement, period string, types, workoutTypes []string, limit int, years []int) ([]string, [][]string, error) {
+func Top(db Storage, measure, period string, types, workoutTypes []string, limit int, years []int) ([]string, [][]string, error) {
+	modifier := float64(1)
+	unit := "%4.0fm"
+	switch {
+	case strings.Contains(measure, "distance") && !strings.Contains(measure, "count"):
+		modifier = 1000
+		unit = "%4.1fkm"
+	case strings.Contains(measure, "time") && !strings.Contains(measure, "count"):
+		modifier = 3600
+		unit = "%4.1fh"
+	}
+	if measure == "time" {
+		measure = "elapsedtime"
+	}
 	results := [][]string{}
 	rows, err := db.QuerySummary(
-		[]string{measurement + " as total", "year", period},
+		[]string{"sum(" + measure + ") as total", "year", period},
 		storage.SummaryConditions{Types: types, WorkoutTypes: workoutTypes, Years: years},
 		&storage.Order{
 			GroupBy: []string{"year", period},
@@ -28,16 +42,14 @@ func Top(db Storage, measurement, period string, types, workoutTypes []string, l
 		if err = rows.Scan(&measureValue, &year, &periodValue); err != nil {
 			return nil, nil, err
 		}
-		value := ""
-		if strings.Contains(measurement, "distance") && !strings.Contains(measurement, "count") {
-			value = fmt.Sprintf("%4.1fkm", measureValue/1000)
-		} else {
-			value = fmt.Sprintf("%4.0f", measureValue)
+		value := fmt.Sprintf(unit, measureValue/modifier)
+		periodStr := strconv.FormatInt(int64(periodValue), 10)
+		if period == "month" {
+			periodStr = time.Month(periodValue).String()
 		}
 		results = append(
-			results,
-			[]string{value, strconv.FormatInt(int64(year), 10), strconv.FormatInt(int64(periodValue), 10)},
+			results, []string{value, strconv.FormatInt(int64(year), 10), periodStr},
 		)
 	}
-	return []string{measurement, "year", period}, results, nil
+	return []string{measure, "year", period}, results, nil
 }

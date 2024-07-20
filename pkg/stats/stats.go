@@ -14,7 +14,7 @@ type Storage interface {
 	QueryYears(cond storage.SummaryConditions) ([]int, error)
 }
 
-func Stats(db Storage, measurement, period string, types, workoutTypes []string, month, day int, years []int) ([]int, [][]string, []string, error) {
+func Stats(db Storage, measure, period string, types, workoutTypes []string, month, day int, years []int) ([]int, [][]string, []string, error) {
 	inYear := map[string]int{
 		"month": 12,
 		"week":  53,
@@ -41,8 +41,11 @@ func Stats(db Storage, measurement, period string, types, workoutTypes []string,
 			results[idx][year] = "    "
 		}
 	}
+	if strings.Contains(measure, "(time)") {
+		measure = strings.ReplaceAll(measure, "(time)", "(elapsedtime)")
+	}
 	rows, err := db.QuerySummary(
-		[]string{"year", period, measurement}, cond,
+		[]string{"year", period, measure}, cond,
 		&storage.Order{GroupBy: []string{period, "year"}, OrderBy: []string{period, "year"}},
 	)
 	if err != nil {
@@ -51,8 +54,14 @@ func Stats(db Storage, measurement, period string, types, workoutTypes []string,
 	defer rows.Close()
 	totalsAbs := make([]float64, len(years))
 	modifier := float64(1)
-	if strings.Contains(measurement, "distance") && !strings.Contains(measurement, "count") {
+	unit := "%4.0fm"
+	switch {
+	case strings.Contains(measure, "distance") && !strings.Contains(measure, "count"):
 		modifier = 1000
+		unit = "%4.1fkm"
+	case strings.Contains(measure, "time") && !strings.Contains(measure, "count"):
+		modifier = 3600
+		unit = "%4.1fh"
 	}
 	for rows.Next() {
 		var year, periodValue int
@@ -61,11 +70,11 @@ func Stats(db Storage, measurement, period string, types, workoutTypes []string,
 			return nil, nil, nil, err
 		}
 		totalsAbs[yearIndex[year]] += measureValue / modifier
-		results[periodValue-1][yearIndex[year]] = fmt.Sprintf("%4.0f", measureValue/modifier)
+		results[periodValue-1][yearIndex[year]] = fmt.Sprintf(unit, measureValue/modifier)
 	}
 	totals := make([]string, len(years))
 	for idx := range totalsAbs {
-		totals[idx] = fmt.Sprintf("%4.0f", totalsAbs[idx])
+		totals[idx] = fmt.Sprintf(unit, totalsAbs[idx])
 	}
 	return years, results, totals, nil
 }
