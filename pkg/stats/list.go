@@ -7,11 +7,11 @@ import (
 	"github.com/jylitalo/mystats/storage"
 )
 
-func List(db Storage, types, workouts []string, years []int, limit int) ([]string, [][]string, error) {
+func List(db Storage, types, workouts []string, years []int, limit int, name string) ([]string, [][]string, error) {
 	o := []string{"year", "month", "day"}
 	rows, err := db.QuerySummary(
 		[]string{"year", "month", "day", "name", "distance", "elevation", "movingtime", "type", "workouttype", "stravaid"},
-		storage.SummaryConditions{WorkoutTypes: workouts, Types: types, Years: years},
+		storage.SummaryConditions{WorkoutTypes: workouts, Types: types, Years: years, Name: name},
 		&storage.Order{GroupBy: o, OrderBy: o, Limit: limit},
 	)
 	if err != nil {

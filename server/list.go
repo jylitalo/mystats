@@ -49,13 +49,14 @@ func listPost(page *Page, db Storage) func(c echo.Context) error {
 		workoutTypes, errW := workoutTypeValues(values)
 		years, errY := yearValues(values)
 		limit, errL := strconv.Atoi(c.FormValue("limit"))
+		name := c.FormValue("name")
 		if err = errors.Join(errV, errT, errW, errY, errL); err != nil {
 			log.Fatal(err)
 		}
 		slog.Info("POST /list", "values", values)
 		page.List.Form.Years = years
 		page.List.Data.Headers, page.List.Data.Rows, err = stats.List(
-			db, selectedTypes(types), selectedWorkoutTypes(workoutTypes), selectedYears(years), limit,
+			db, selectedTypes(types), selectedWorkoutTypes(workoutTypes), selectedYears(years), limit, name,
 		)
 		return errors.Join(err, c.Render(200, "list-data", page.List.Data))
 	}

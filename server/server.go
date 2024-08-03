@@ -237,7 +237,7 @@ func indexGet(page *Page, db Storage) func(c echo.Context) error {
 		workoutTypes := selectedWorkoutTypes(pf.WorkoutTypes)
 		years := selectedYears(pf.Years)
 		pld := &page.List.Data
-		pld.Headers, pld.Rows, errL = stats.List(db, types, workoutTypes, years, page.List.Form.Limit)
+		pld.Headers, pld.Rows, errL = stats.List(db, types, workoutTypes, years, page.List.Form.Limit, "")
 		// init Top tab
 		tf := &page.Top.Form
 		td := &page.Top.Data
