@@ -21,6 +21,7 @@ import (
 type Storage interface {
 	QueryBestEffort(fields []string, name string, order *storage.Order) (*sql.Rows, error)
 	QueryBestEffortDistances() ([]string, error)
+	QuerySplit(fields []string, id int64) (*sql.Rows, error)
 	QuerySummary(fields []string, cond storage.SummaryConditions, order *storage.Order) (*sql.Rows, error)
 	QueryTypes(cond storage.SummaryConditions) ([]string, error)
 	QueryWorkoutTypes(cond storage.SummaryConditions) ([]string, error)
@@ -218,6 +219,7 @@ func Start(db Storage, selectedTypes []string, port int) error {
 
 	e.GET("/", indexGet(page, db))
 	e.POST("/best", bestPost(page, db))
+	e.POST("/event", listEvent(page, db))
 	e.POST("/list", listPost(page, db))
 	e.POST("/plot", plotPost(page, db))
 	e.POST("/top", topPost(page, db))

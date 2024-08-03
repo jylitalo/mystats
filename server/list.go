@@ -29,14 +29,16 @@ func newListFormData() ListFormData {
 }
 
 type ListPage struct {
-	Form ListFormData
-	Data TableData
+	Form  ListFormData
+	Data  TableData
+	Event TableData
 }
 
 func newListPage() *ListPage {
 	return &ListPage{
-		Form: newListFormData(),
-		Data: newTableData(),
+		Form:  newListFormData(),
+		Data:  newTableData(),
+		Event: newTableData(),
 	}
 }
 
@@ -59,5 +61,16 @@ func listPost(page *Page, db Storage) func(c echo.Context) error {
 			db, selectedTypes(types), selectedWorkoutTypes(workoutTypes), selectedYears(years), limit, name,
 		)
 		return errors.Join(err, c.Render(200, "list-data", page.List.Data))
+	}
+}
+
+func listEvent(page *Page, db Storage) func(c echo.Context) error {
+	return func(c echo.Context) error {
+		id, err := strconv.Atoi(c.FormValue("id"))
+		if err != nil {
+			log.Fatal(err)
+		}
+		page.List.Event.Headers, page.List.Event.Rows, err = stats.Split(db, int64(id))
+		return errors.Join(err, c.Render(200, "list-event", page.List.Event))
 	}
 }

@@ -10,6 +10,7 @@ import (
 
 type Storage interface {
 	QueryBestEffort(fields []string, name string, order *storage.Order) (*sql.Rows, error)
+	QuerySplit(fields []string, id int64) (*sql.Rows, error)
 	QuerySummary(fields []string, cond storage.SummaryConditions, order *storage.Order) (*sql.Rows, error)
 	QueryYears(cond storage.SummaryConditions) ([]int, error)
 }
