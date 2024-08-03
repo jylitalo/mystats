@@ -32,10 +32,12 @@ func scan(rows *sql.Rows, years []int, measure string) (*numbers, error) {
 	var xmax, modifier float64
 
 	tz, _ := time.LoadLocation("Europe/Helsinki")
+	items := map[int]int{}
 	xs := map[int][]float64{}
 	ys := map[int][]float64{}
 	totals := map[int]float64{}
 	for _, year := range years {
+		items[year] = 0
 		xs[year] = []float64{}
 		ys[year] = []float64{}
 		totals[year] = 0
@@ -56,9 +58,15 @@ func scan(rows *sql.Rows, years []int, measure string) (*numbers, error) {
 		day1 := time.Date(year, time.January, 1, 6, 0, 0, 0, tz)
 		now := time.Date(year, time.Month(month), day, 6, 0, 0, 0, tz)
 		days := now.Sub(day1).Hours() / 24
+		if items[year] > 0 && days-xs[year][items[year]-1] > 1 {
+			xs[year] = append(xs[year], days-1)
+			ys[year] = append(ys[year], ys[year][items[year]-1])
+			items[year]++
+		}
 		xmax = max(xmax, days)
 		xs[year] = append(xs[year], days)
 		ys[year] = append(ys[year], totals[year])
+		items[year]++
 	}
 	for year := range xs {
 		idx := len(xs[year]) - 1
