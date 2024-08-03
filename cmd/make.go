@@ -105,24 +105,40 @@ func makeDB(update bool) (Storage, error) {
 	if err != nil {
 		return nil, err
 	}
-	detailed, err := api.ReadBestEffortJSONs(fnames)
+	acts, err := api.ReadActivityJSONs(fnames)
 	if err != nil {
 		return nil, err
 	}
 	dbEfforts := []storage.BestEffortRecord{}
-	for _, activity := range detailed {
-		dbEfforts = append(dbEfforts, storage.BestEffortRecord{
-			StravaID:    activity.EffortSummary.Activity.Id,
-			Name:        activity.EffortSummary.Name,
-			MovingTime:  activity.EffortSummary.MovingTime,
-			ElapsedTime: activity.EffortSummary.ElapsedTime,
-			Distance:    int(activity.Distance),
-		})
+	dbSplits := []storage.SplitRecord{}
+	for _, activity := range acts {
+		id := activity.Id
+		for _, be := range activity.BestEfforts {
+			dbEfforts = append(dbEfforts, storage.BestEffortRecord{
+				StravaID:    id,
+				Name:        be.EffortSummary.Name,
+				MovingTime:  be.EffortSummary.MovingTime,
+				ElapsedTime: be.EffortSummary.ElapsedTime,
+				Distance:    int(be.Distance),
+			})
+		}
+		for _, split := range activity.SplitsMetric {
+			dbSplits = append(dbSplits, storage.SplitRecord{
+				StravaID:      id,
+				Split:         split.Split,
+				MovingTime:    split.MovingTime,
+				ElapsedTime:   split.ElapsedTime,
+				ElevationDiff: split.ElevationDifference,
+				Distance:      split.Distance,
+			})
+
+		}
 	}
 	errR := db.Remove()
 	errO := db.Open()
 	errC := db.Create()
 	errI := db.InsertSummary(dbActivities)
 	errBE := db.InsertBestEffort(dbEfforts)
-	return db, errors.Join(errR, errO, errC, errI, errBE)
+	errSplit := db.InsertSplit(dbSplits)
+	return db, errors.Join(errR, errO, errC, errI, errBE, errSplit)
 }

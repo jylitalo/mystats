@@ -85,22 +85,20 @@ func (cfg *Config) Refresh() (*Config, bool, error) {
 	return &tokens, true, nil
 }
 
-func ReadBestEffortJSONs(fnames []string) ([]strava.BestEffort, error) {
-	efforts := []strava.BestEffort{}
+func ReadActivityJSONs(fnames []string) ([]strava.ActivityDetailed, error) {
+	acts := []strava.ActivityDetailed{}
 	for _, fname := range fnames {
 		body, err := os.ReadFile(filepath.Clean(fname))
 		if err != nil {
-			return efforts, err
+			return acts, err
 		}
 		activity := strava.ActivityDetailed{}
 		if err = json.Unmarshal(body, &activity); err != nil {
-			return efforts, err
+			return acts, err
 		}
-		for _, be := range activity.BestEfforts {
-			efforts = append(efforts, *be)
-		}
+		acts = append(acts, activity)
 	}
-	return efforts, nil
+	return acts, nil
 }
 
 func ReadSummaryJSONs(fnames []string) ([]ActivitySummary, error) {
