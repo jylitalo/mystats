@@ -243,9 +243,7 @@ func indexGet(page *Page, db Storage) func(c echo.Context) error {
 		// init Top tab
 		tf := &page.Top.Form
 		td := &page.Top.Data
-		td.Data.Headers, td.Data.Rows, errT = stats.Top(
-			db, tf.Measure, tf.Period, types, workoutTypes, tf.Limit, years,
-		)
+		td.Headers, td.Rows, errT = stats.Top(db, tf.Measure, tf.Period, types, workoutTypes, tf.Limit, years)
 		// init Best tab
 		for _, be := range selectedBestEfforts(page.Best.Form.Distances) {
 			headers, rows, err := stats.Best(db, be, 10)

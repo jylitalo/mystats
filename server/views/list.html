@@ -62,6 +62,9 @@
 
 {{ block "list-event" . }}
 <div id="list-event">
+    {{ if ne .Name "" }}
+    <b>Name:</b> {{ .Name }} ({{ .Date }})
+    {{ end }}
     <table>
         <thead>
             <tr>
