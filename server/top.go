@@ -37,17 +37,9 @@ func newTopFormData() TopFormData {
 }
 
 type TopData struct {
-	Data    TableData
 	Measure string
 	Period  string
-}
-
-func newTopData() TopData {
-	return TopData{
-		Data:    newTableData(),
-		Measure: "distance",
-		Period:  "week",
-	}
+	TableData
 }
 
 type TopPage struct {
@@ -58,7 +50,11 @@ type TopPage struct {
 func newTopPage() *TopPage {
 	return &TopPage{
 		Form: newTopFormData(),
-		Data: newTopData(),
+		Data: TopData{
+			Measure:   "distance",
+			Period:    "week",
+			TableData: newTableData(),
+		},
 	}
 }
 
@@ -83,7 +79,7 @@ func topPost(page *Page, db Storage) func(c echo.Context) error {
 		tf := &page.Top.Form
 		tf.Years = years
 		td := &page.Top.Data
-		td.Data.Headers, td.Data.Rows, err = stats.Top(
+		td.Headers, td.Rows, err = stats.Top(
 			db, tf.Measure, tf.Period, selectedTypes(types),
 			selectedWorkoutTypes(workoutTypes), tf.Limit, selectedYears(years),
 		)
