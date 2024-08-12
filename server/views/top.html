@@ -43,13 +43,13 @@
     <table>
         <thead>
             <tr>
-            {{ range $s := .Data.Headers }}
+            {{ range $s := .Headers }}
             <th class="text">{{ $s }}</th>
             {{ end }}
         </tr>
         </thead>
         <tbody>
-            {{ range $row := .Data.Rows }}
+            {{ range $row := .Rows }}
                 {{ $trimmed := joined $row }}
                 {{ if ne $trimmed "" }}
                 <tr>

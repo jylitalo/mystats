@@ -52,6 +52,7 @@ type SummaryConditions struct {
 	Month        int
 	Day          int
 	Name         string
+	StravaID     int64
 }
 
 type conditions struct {
@@ -236,7 +237,7 @@ func sqlQuery(tables []string, fields []string, cond conditions, order *Order) s
 	}
 	if cond.StravaID > 0 {
 		for _, t := range tables {
-			where = append(where, fmt.Sprintf("%s=%d", t, cond.StravaID))
+			where = append(where, fmt.Sprintf("%s.stravaid=%d", t, cond.StravaID))
 		}
 	}
 	if cond.Name != "" {
@@ -307,7 +308,7 @@ func (sq *Sqlite3) QuerySplit(fields []string, id int64) (*sql.Rows, error) {
 	if sq.db == nil {
 		return nil, errors.New("database is nil")
 	}
-	query := sqlQuery([]string{"split", "summary"}, fields, conditions{StravaID: id}, &Order{OrderBy: []string{"Split"}})
+	query := sqlQuery([]string{"split"}, fields, conditions{StravaID: id}, &Order{OrderBy: []string{"split"}})
 	// slog.Info("storage.Query", "query", query)
 	rows, err := sq.db.Query(query)
 	if err != nil {
@@ -325,7 +326,7 @@ func (sq *Sqlite3) QuerySummary(fields []string, cond SummaryConditions, order *
 		conditions{
 			Types: cond.Types, WorkoutTypes: cond.WorkoutTypes,
 			Years: cond.Years, Month: cond.Month, Day: cond.Day,
-			Name: cond.Name,
+			Name: cond.Name, StravaID: cond.StravaID,
 		},
 		order,
 	)

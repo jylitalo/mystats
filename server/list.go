@@ -2,11 +2,13 @@ package server
 
 import (
 	"errors"
+	"fmt"
 	"log"
 	"log/slog"
 	"strconv"
 
 	"github.com/jylitalo/mystats/pkg/stats"
+	"github.com/jylitalo/mystats/storage"
 	"github.com/labstack/echo/v4"
 )
 
@@ -28,15 +30,26 @@ func newListFormData() ListFormData {
 	}
 }
 
+type ListEventData struct {
+	Name string
+	Date string
+	TableData
+}
+
 type ListPage struct {
-	Form ListFormData
-	Data TableData
+	Form  ListFormData
+	Data  TableData
+	Event ListEventData
 }
 
 func newListPage() *ListPage {
 	return &ListPage{
 		Form: newListFormData(),
 		Data: newTableData(),
+		Event: ListEventData{
+			Name:      "",
+			TableData: newTableData(),
+		},
 	}
 }
 
@@ -59,5 +72,29 @@ func listPost(page *Page, db Storage) func(c echo.Context) error {
 			db, selectedTypes(types), selectedWorkoutTypes(workoutTypes), selectedYears(years), limit, name,
 		)
 		return errors.Join(err, c.Render(200, "list-data", page.List.Data))
+	}
+}
+
+func listEvent(page *Page, db Storage) func(c echo.Context) error {
+	return func(c echo.Context) error {
+		id, err := strconv.Atoi(c.FormValue("id"))
+		if err != nil {
+			log.Fatal(err)
+		}
+		rows, err := db.QuerySummary([]string{"name", "year", "month", "day"}, storage.SummaryConditions{StravaID: int64(id)}, nil)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		if !rows.Next() {
+			return fmt.Errorf("listEvent was unable to find activity %d", id)
+		}
+		var year, month, day int
+		if err = rows.Scan(&page.List.Event.Name, &year, &month, &day); err != nil {
+			return err
+		}
+		page.List.Event.Date = fmt.Sprintf("%d.%d.%d", day, month, year)
+		page.List.Event.Headers, page.List.Event.Rows, err = stats.Split(db, int64(id))
+		return errors.Join(err, c.Render(200, "list-event", page.List.Event))
 	}
 }

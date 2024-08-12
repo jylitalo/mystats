@@ -2,6 +2,8 @@
 {{ template "list-form" .Form }}
 <hr />
 {{ template "list-data" .Data }}
+<hr />
+<div id="list-event"></div>
 {{ end }}
 
 {{ block "list-form" . }}
@@ -28,6 +30,44 @@
     <table>
         <thead>
             <tr>
+            {{ range $idx,$s := .Headers }}
+            {{ if ne $idx 0 }}<th class="text">{{ $s }}</th>{{ end }}
+            {{ end }}
+        </tr>
+        </thead>
+        <tbody>
+            {{ range $row := .Rows }}
+                {{ $trimmed := joined $row }}
+                {{ if ne $trimmed "" }}
+                <tr>
+                    {{ $stravaID := (index $row 0) }}
+                    {{ range $idx, $col := $row }}
+                        {{ if eq $idx 2 }}
+                        <td class="text"><button hx-swap="outerHTML" hx-target="#list-event" hx-post="/event?id={{ $stravaID }}">{{ $col }}</button></td>
+                        {{ else if eq $idx 7 }}
+                        <td class="text">{{ $col }}</td>
+                        {{ else if eq $idx 8 }}
+                        <td class="text"><a href="{{ $col }}">{{ $col }}</a></td>
+                        {{ else if ne $idx 0 }}
+                        <td>{{ $col }}</input></td>
+                        {{ end }}
+                    {{ end }}
+                </tr>
+                {{ end }}
+            {{ end }}
+        </tbody>
+    </table>
+</div>
+{{ end }}
+
+{{ block "list-event" . }}
+<div id="list-event">
+    {{ if ne .Name "" }}
+    <b>Name:</b> {{ .Name }} ({{ .Date }})
+    {{ end }}
+    <table>
+        <thead>
+            <tr>
             {{ range $s := .Headers }}
             <th class="text">{{ $s }}</th>
             {{ end }}
@@ -39,11 +79,7 @@
                 {{ if ne $trimmed "" }}
                 <tr>
                     {{ range $idx, $col := $row }}
-                        {{ if eq $idx 7 }}
-                        <td><a href="{{ $col }}">{{ $col }}</a></td>
-                        {{ else }}
-                        <td{{ if or (eq $idx 1) (eq $idx 6) }} class="text"{{ end }}>{{ $col }}</td>
-                        {{ end }}
+                        <td>{{ $col }}</td>
                     {{ end }}
                 </tr>
                 {{ end }}
