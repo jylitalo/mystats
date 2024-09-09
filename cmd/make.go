@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"log/slog"
@@ -11,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/jylitalo/mystats/api"
+	"github.com/jylitalo/mystats/pkg/telemetry"
 	"github.com/jylitalo/mystats/storage"
 )
 
@@ -33,7 +35,7 @@ func makeCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			flags := cmd.Flags()
 			update, _ := flags.GetBool("update")
-			db, err := makeDB(update)
+			db, err := makeDB(cmd.Context(), update)
 			if err != nil {
 				return err
 			}
@@ -60,25 +62,30 @@ func skipDB(db *storage.Sqlite3, fnames []string) bool {
 	return dbMtime.After(pagesMtime)
 }
 
-func makeDB(update bool) (Storage, error) {
+func makeDB(ctx context.Context, update bool) (Storage, error) {
+	tracer := telemetry.GetTracer(ctx)
+	_, span := tracer.Start(ctx, "make")
+	defer span.End()
+
 	slog.Info("Fetch activities from Strava")
 	if update {
-		if err := fetch(false); err != nil {
+		if err := fetch(ctx, true); err != nil {
 			return nil, err
 		}
 	}
-	fnames, err := pageFiles()
-	if err != nil {
+	pageFnames, errP := pageFiles()
+	actFnames, errF := activitiesFiles()
+	if err := errors.Join(errP, errF); err != nil {
 		return nil, err
 	}
 	db := &storage.Sqlite3{}
-	if skipDB(db, fnames) {
+	if skipDB(db, append(pageFnames, actFnames...)) {
 		slog.Info("Database is uptodate")
 		db.Open()
 		return db, nil
 	}
 	slog.Info("Making database")
-	activities, err := api.ReadSummaryJSONs(fnames)
+	activities, err := api.ReadSummaryJSONs(pageFnames)
 	if err != nil {
 		return nil, err
 	}
@@ -102,11 +109,7 @@ func makeDB(update bool) (Storage, error) {
 			ElapsedTime: activity.ElapsedTime,
 		})
 	}
-	fnames, err = activitiesFiles()
-	if err != nil {
-		return nil, err
-	}
-	acts, err := api.ReadActivityJSONs(fnames)
+	acts, err := api.ReadActivityJSONs(actFnames)
 	if err != nil {
 		return nil, err
 	}
@@ -138,8 +141,8 @@ func makeDB(update bool) (Storage, error) {
 	errR := db.Remove()
 	errO := db.Open()
 	errC := db.Create()
-	errI := db.InsertSummary(dbActivities)
-	errBE := db.InsertBestEffort(dbEfforts)
-	errSplit := db.InsertSplit(dbSplits)
+	errI := db.InsertSummary(ctx, dbActivities)
+	errBE := db.InsertBestEffort(ctx, dbEfforts)
+	errSplit := db.InsertSplit(ctx, dbSplits)
 	return db, errors.Join(errR, errO, errC, errI, errBE, errSplit)
 }

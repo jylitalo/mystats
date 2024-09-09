@@ -22,7 +22,7 @@ func plotCmd(types []string) *cobra.Command {
 			update, _ := flags.GetBool("update")
 			month, _ := flags.GetInt("month")
 			day, _ := flags.GetInt("day")
-			db, err := makeDB(update)
+			db, err := makeDB(cmd.Context(), update)
 			if err != nil {
 				return err
 			}
@@ -31,7 +31,7 @@ func plotCmd(types []string) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			slog.Info("Plat created", "output", output)
+			slog.Info("Plot created", "output", output)
 			return nil
 		},
 	}

@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"log/slog"
 	"strconv"
 	"time"
 
@@ -139,6 +138,5 @@ func Plot(db Storage, types, workoutTypes []string, measure string, month, day i
 	if err != nil {
 		return errors.New("failed to save image")
 	}
-	slog.Info("Plat created", "filename", filename)
 	return nil
 }

@@ -27,7 +27,7 @@ func bestCmd() *cobra.Command {
 			if _, ok := formatFn[format]; !ok {
 				return fmt.Errorf("unknown format: %s", format)
 			}
-			db, err := makeDB(update)
+			db, err := makeDB(cmd.Context(), update)
 			if err != nil {
 				return err
 			}

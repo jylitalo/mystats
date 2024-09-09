@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jylitalo/mystats/pkg/telemetry"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -141,7 +143,10 @@ func (sq *Sqlite3) Create() error {
 	return errors.Join(errSummary, errBE, errSplit)
 }
 
-func (sq *Sqlite3) InsertSummary(records []SummaryRecord) error {
+func (sq *Sqlite3) InsertSummary(ctx context.Context, records []SummaryRecord) error {
+	tracer := telemetry.GetTracer(ctx)
+	_, span := tracer.Start(ctx, "InsertSummary")
+	defer span.End()
 	if sq.db == nil {
 		return errors.New("database is nil")
 	}
@@ -167,7 +172,10 @@ func (sq *Sqlite3) InsertSummary(records []SummaryRecord) error {
 	return tx.Commit()
 }
 
-func (sq *Sqlite3) InsertBestEffort(records []BestEffortRecord) error {
+func (sq *Sqlite3) InsertBestEffort(ctx context.Context, records []BestEffortRecord) error {
+	tracer := telemetry.GetTracer(ctx)
+	_, span := tracer.Start(ctx, "InsertBestEffort")
+	defer span.End()
 	if sq.db == nil {
 		return errors.New("database is nil")
 	}
@@ -188,7 +196,10 @@ func (sq *Sqlite3) InsertBestEffort(records []BestEffortRecord) error {
 	return tx.Commit()
 }
 
-func (sq *Sqlite3) InsertSplit(records []SplitRecord) error {
+func (sq *Sqlite3) InsertSplit(ctx context.Context, records []SplitRecord) error {
+	tracer := telemetry.GetTracer(ctx)
+	_, span := tracer.Start(ctx, "InsertSplit")
+	defer span.End()
 	if sq.db == nil {
 		return errors.New("database is nil")
 	}

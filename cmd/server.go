@@ -18,7 +18,7 @@ func serverCmd(types []string) *cobra.Command {
 			flags := cmd.Flags()
 			port, _ := flags.GetInt("port")
 			update, _ := flags.GetBool("update")
-			db, err := makeDB(update)
+			db, err := makeDB(cmd.Context(), update)
 			if err != nil {
 				return err
 			}

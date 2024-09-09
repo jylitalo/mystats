@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/jylitalo/mystats/api"
 	"github.com/jylitalo/mystats/config"
+	"github.com/jylitalo/mystats/pkg/telemetry"
 )
 
 type jsonStatus struct {
@@ -32,14 +34,18 @@ func fetchCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			flags := cmd.Flags()
 			be, _ := flags.GetBool("best_efforts")
-			return fetch(be)
+			return fetch(cmd.Context(), be)
 		},
 	}
-	cmd.Flags().Bool("best_efforts", false, "Fetch activities best efforts")
+	cmd.Flags().Bool("best_efforts", true, "Fetch activities best efforts")
 	return cmd
 }
 
-func fetch(best_efforts bool) error {
+func fetch(ctx context.Context, best_efforts bool) error {
+	tracer := telemetry.GetTracer(ctx)
+	_, span := tracer.Start(ctx, "fetch")
+	defer span.End()
+
 	status, err := getJsonStatus()
 	if err != nil {
 		return err
@@ -52,10 +58,10 @@ func fetch(best_efforts bool) error {
 	if err != nil {
 		return err
 	}
-	ids, err := saveActivities(call, status.pages)
+	ids, apiCalls, err := saveActivities(call, status.pages)
 	if err == nil && best_efforts {
 		ids = append(ids, status.ids...)
-		err = fetchBestEfforts(client, ids)
+		err = fetchBestEfforts(client, ids, apiCalls)
 	}
 	if err != nil && api.IsRateLimitExceeded(err) {
 		slog.Warn("Strava API Rate Limit Exceeded")
@@ -76,11 +82,10 @@ func getClient() (*api.Client, error) {
 	return client, err
 }
 
-func fetchBestEfforts(client *api.Client, ids []int64) error {
+func fetchBestEfforts(client *api.Client, ids []int64, apiCalls int) error {
 	if len(ids) == 0 {
 		return errors.New("no stravaIDs found from database")
 	}
-	fetched := 0
 	_ = os.Mkdir("activities", 0750)
 	actFiles, err := activitiesFiles()
 	if err != nil {
@@ -110,13 +115,13 @@ func fetchBestEfforts(client *api.Client, ids []int64) error {
 		if err = os.WriteFile(fmt.Sprintf("activities/activity_%d.json", id), j, 0600); err != nil {
 			return err
 		}
-		fetched++
-		if fetched >= 80 {
-			slog.Info("Already fetched 80 activities", "left", len(ids)-idx)
+		apiCalls++
+		if apiCalls >= 90 {
+			slog.Info("Already fetched 90 activities", "left", len(ids)-idx)
 			return nil
 		}
 	}
-	slog.Info("Activity details fetched", "fetched", fetched)
+	slog.Info("Activity details fetched", "fetched", apiCalls)
 	return err
 }
 
@@ -165,7 +170,7 @@ func callListActivities(client *api.Client, after time.Time) (*api.CurrentAthlet
 	return call.After(int(after.Unix())), nil
 }
 
-func saveActivities(call *api.CurrentAthleteListActivitiesCall, prior int) ([]int64, error) {
+func saveActivities(call *api.CurrentAthleteListActivitiesCall, prior int) ([]int64, int, error) {
 	page := 1
 	newIds := []int64{}
 	for {
@@ -173,29 +178,29 @@ func saveActivities(call *api.CurrentAthleteListActivitiesCall, prior int) ([]in
 		activities, err := call.Do()
 		if err != nil {
 			if api.IsRateLimitExceeded(err) {
-				return newIds, err
+				return newIds, page, err
 			}
 			if page == 1 {
-				return newIds, fmt.Errorf("run mystats configure --client_id=... --client_secret=... first. err=%w", err)
+				return newIds, page, fmt.Errorf("run mystats configure --client_id=... --client_secret=... first. err=%w", err)
 			}
-			return newIds, err
+			return newIds, page, err
 		}
 		if len(activities) == 0 {
-			return newIds, err
+			return newIds, page, err
 		}
 		content, err := json.Marshal(activities)
 		if err != nil {
-			return newIds, err
+			return newIds, page, err
 		}
 		for _, act := range activities {
 			newIds = append(newIds, act.Id)
 		}
 		fmt.Printf("%d activities => pages/page%d.json ...\n", len(activities), page+prior)
 		if err = os.WriteFile(fmt.Sprintf("pages/page%d.json", page+prior), content, 0600); err != nil {
-			return newIds, err
+			return newIds, page, err
 		}
 		if len(activities) < 30 {
-			return newIds, nil
+			return newIds, page, nil
 		}
 		page++
 	}

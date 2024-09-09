@@ -22,7 +22,7 @@ func listCmd(types []string) *cobra.Command {
 			types, _ := flags.GetStringSlice("type")
 			update, _ := flags.GetBool("update")
 			workouts, _ := flags.GetStringSlice("workout")
-			db, err := makeDB(update)
+			db, err := makeDB(cmd.Context(), update)
 			if err != nil {
 				return err
 			}
