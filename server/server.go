@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -179,6 +180,7 @@ func Start(ctx context.Context, db Storage, selectedTypes []string, port int) er
 	e := echo.New()
 	e.Renderer = newTemplate("server/views/*.html")
 	e.Use(middleware.Logger())
+	os.MkdirAll("server/cache", 0755)
 	e.Static("/cache", "server/cache")
 	e.Static("/css", "server/css")
 
