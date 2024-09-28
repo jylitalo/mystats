@@ -88,8 +88,7 @@ func (cfg *Config) Refresh() (*Config, bool, error) {
 }
 
 func ReadActivityJSONs(ctx context.Context, fnames []string) ([]strava.ActivityDetailed, error) {
-	tracer := telemetry.GetTracer(ctx)
-	ctx, span := tracer.Start(ctx, "api.ReadActivityJSONs")
+	_, span := telemetry.NewSpan(ctx, "api.ReadActivityJSONs")
 	defer span.End()
 
 	acts := []strava.ActivityDetailed{}

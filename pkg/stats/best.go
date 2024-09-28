@@ -1,12 +1,17 @@
 package stats
 
 import (
+	"context"
 	"fmt"
 
+	"github.com/jylitalo/mystats/pkg/telemetry"
 	"github.com/jylitalo/mystats/storage"
 )
 
-func Best(db Storage, distance string, limit int) ([]string, [][]string, error) {
+func Best(ctx context.Context, db Storage, distance string, limit int) ([]string, [][]string, error) {
+	_, span := telemetry.NewSpan(ctx, "stats.Best")
+	defer span.End()
+
 	o := []string{"besteffort.movingtime", "year", "month", "day"}
 	rows, err := db.QueryBestEffort(
 		[]string{

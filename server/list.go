@@ -59,9 +59,9 @@ func listPost(ctx context.Context, page *Page, db Storage) func(c echo.Context) 
 	return func(c echo.Context) error {
 		var err error
 
-		tracer := telemetry.GetTracer(ctx)
-		_, span := tracer.Start(ctx, "listPost")
+		_, span := telemetry.NewSpan(ctx, "listPost")
 		defer span.End()
+
 		values, errV := c.FormParams()
 		types, errT := typeValues(values)
 		workoutTypes, errW := workoutTypeValues(values)
@@ -74,7 +74,7 @@ func listPost(ctx context.Context, page *Page, db Storage) func(c echo.Context) 
 		slog.Info("POST /list", "values", values)
 		page.List.Form.Years = years
 		page.List.Data.Headers, page.List.Data.Rows, err = stats.List(
-			db, selectedTypes(types), selectedWorkoutTypes(workoutTypes), selectedYears(years), limit, name,
+			ctx, db, selectedTypes(types), selectedWorkoutTypes(workoutTypes), selectedYears(years), limit, name,
 		)
 		return errors.Join(err, c.Render(200, "list-data", page.List.Data))
 	}
@@ -82,9 +82,9 @@ func listPost(ctx context.Context, page *Page, db Storage) func(c echo.Context) 
 
 func listEvent(ctx context.Context, page *Page, db Storage) func(c echo.Context) error {
 	return func(c echo.Context) error {
-		tracer := telemetry.GetTracer(ctx)
-		_, span := tracer.Start(ctx, "listEvent")
+		_, span := telemetry.NewSpan(ctx, "listEvent")
 		defer span.End()
+
 		id, err := strconv.Atoi(c.FormValue("id"))
 		if err != nil {
 			log.Fatal(err)
@@ -102,7 +102,7 @@ func listEvent(ctx context.Context, page *Page, db Storage) func(c echo.Context)
 			return err
 		}
 		page.List.Event.Date = fmt.Sprintf("%d.%d.%d", day, month, year)
-		page.List.Event.Headers, page.List.Event.Rows, err = stats.Split(db, int64(id))
+		page.List.Event.Headers, page.List.Event.Rows, err = stats.Split(ctx, db, int64(id))
 		return errors.Join(err, c.Render(200, "list-event", page.List.Event))
 	}
 }

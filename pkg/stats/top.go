@@ -1,15 +1,20 @@
 package stats
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/jylitalo/mystats/pkg/telemetry"
 	"github.com/jylitalo/mystats/storage"
 )
 
-func Top(db Storage, measure, period string, types, workoutTypes []string, limit int, years []int) ([]string, [][]string, error) {
+func Top(ctx context.Context, db Storage, measure, period string, types, workoutTypes []string, limit int, years []int) ([]string, [][]string, error) {
+	_, span := telemetry.NewSpan(ctx, "stats.Top")
+	defer span.End()
+
 	modifier := float64(1)
 	unit := "%4.0fm"
 	switch {

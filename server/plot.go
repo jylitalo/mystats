@@ -56,7 +56,10 @@ type PlotData struct {
 		ctx context.Context, db plot.Storage, types, workoutTypes []string, measure string,
 		month, day int, years []int, filename string,
 	) error
-	stats func(db stats.Storage, measure, period string, types, workoutTypes []string, month, day int, years []int) ([]int, [][]string, []string, error)
+	stats func(
+		ctx context.Context, db stats.Storage, measure, period string, types, workoutTypes []string,
+		month, day int, years []int,
+	) ([]int, [][]string, []string, error)
 }
 
 func newPlotData() PlotData {
@@ -84,8 +87,7 @@ func (p *PlotPage) render(
 	ctx context.Context, db Storage, types, workoutTypes map[string]bool, month, day int,
 	years map[int]bool, period string,
 ) error {
-	tracer := telemetry.GetTracer(ctx)
-	ctx, span := tracer.Start(ctx, "plot.render")
+	ctx, span := telemetry.NewSpan(ctx, "plot.render")
 	defer span.End()
 
 	p.Form.EndMonth = month
@@ -109,7 +111,7 @@ func (p *PlotPage) render(
 		measure = "elapsedtime"
 	}
 	d.Years, d.Stats, d.Totals, err = d.stats(
-		db, "sum("+measure+")", period, checkedTypes, checkedWorkoutTypes,
+		ctx, db, "sum("+measure+")", period, checkedTypes, checkedWorkoutTypes,
 		month, day, checkedYears,
 	)
 	if err != nil {
@@ -120,8 +122,7 @@ func (p *PlotPage) render(
 
 func plotPost(ctx context.Context, page *Page, db Storage) func(c echo.Context) error {
 	return func(c echo.Context) error {
-		tracer := telemetry.GetTracer(ctx)
-		_, span := tracer.Start(ctx, "plotPost")
+		_, span := telemetry.NewSpan(ctx, "plotPost")
 		defer span.End()
 		month, errM := strconv.Atoi(c.FormValue("EndMonth"))
 		day, errD := strconv.Atoi(c.FormValue("EndDay"))

@@ -20,10 +20,6 @@ type otelCtxKeyType string
 
 const otelCtxKey otelCtxKeyType = "github.com/jylitalo/pkg/otel"
 
-func GetTracer(ctx context.Context) trace.Tracer {
-	return ctx.Value(otelCtxKey).(trace.Tracer)
-}
-
 func newConsoleExporter(fname string) (sdktrace.SpanExporter, error) {
 	// Your preferred exporter: console, jaeger, zipkin, OTLP, etc.
 	opts := []stdouttrace.Option{}
@@ -70,6 +66,7 @@ func newTraceProvider(exp sdktrace.SpanExporter) *sdktrace.TracerProvider {
 
 func Setup(ctx context.Context, name string) (context.Context, *sdktrace.TracerProvider, error) {
 	var newExp func(string) (sdktrace.SpanExporter, error)
+
 	if strings.Contains(name, ":") {
 		newExp = newOtelExporter
 	} else {
@@ -85,4 +82,8 @@ func Setup(ctx context.Context, name string) (context.Context, *sdktrace.TracerP
 	tracer := tp.Tracer(name)
 	ctx = context.WithValue(ctx, otelCtxKey, tracer)
 	return ctx, tp, err
+}
+
+func NewSpan(ctx context.Context, name string) (context.Context, trace.Span) {
+	return ctx.Value(otelCtxKey).(trace.Tracer).Start(ctx, name)
 }

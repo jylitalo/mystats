@@ -27,12 +27,13 @@ func bestCmd() *cobra.Command {
 			if _, ok := formatFn[format]; !ok {
 				return fmt.Errorf("unknown format: %s", format)
 			}
-			db, err := makeDB(cmd.Context(), update)
+			ctx := cmd.Context()
+			db, err := makeDB(ctx, update)
 			if err != nil {
 				return err
 			}
 			defer db.Close()
-			headers, results, err := stats.Best(db, distance, limit)
+			headers, results, err := stats.Best(ctx, db, distance, limit)
 			if err != nil {
 				return err
 			}

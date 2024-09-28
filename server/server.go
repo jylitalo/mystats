@@ -175,8 +175,7 @@ func yearValues(values url.Values) (map[int]bool, error) {
 }
 
 func Start(ctx context.Context, db Storage, selectedTypes []string, port int) error {
-	tracer := telemetry.GetTracer(ctx)
-	_, span := tracer.Start(ctx, "server.start")
+	_, span := telemetry.NewSpan(ctx, "server.start")
 	e := echo.New()
 	e.Renderer = newTemplate("server/views/*.html")
 	e.Use(middleware.Logger())
@@ -236,8 +235,7 @@ func indexGet(ctx context.Context, page *Page, db Storage) func(c echo.Context) 
 	return func(c echo.Context) error {
 		var errL, errT error
 
-		tracer := telemetry.GetTracer(ctx)
-		_, span := tracer.Start(ctx, "indexGet")
+		_, span := telemetry.NewSpan(ctx, "indexGet")
 		defer span.End()
 		pf := &page.Plot.Form
 		errP := page.Plot.render(
@@ -248,14 +246,14 @@ func indexGet(ctx context.Context, page *Page, db Storage) func(c echo.Context) 
 		workoutTypes := selectedWorkoutTypes(pf.WorkoutTypes)
 		years := selectedYears(pf.Years)
 		pld := &page.List.Data
-		pld.Headers, pld.Rows, errL = stats.List(db, types, workoutTypes, years, page.List.Form.Limit, "")
+		pld.Headers, pld.Rows, errL = stats.List(ctx, db, types, workoutTypes, years, page.List.Form.Limit, "")
 		// init Top tab
 		tf := &page.Top.Form
 		td := &page.Top.Data
-		td.Headers, td.Rows, errT = stats.Top(db, tf.Measure, tf.Period, types, workoutTypes, tf.Limit, years)
+		td.Headers, td.Rows, errT = stats.Top(ctx, db, tf.Measure, tf.Period, types, workoutTypes, tf.Limit, years)
 		// init Best tab
 		for _, be := range selectedBestEfforts(page.Best.Form.Distances) {
-			headers, rows, err := stats.Best(db, be, 10)
+			headers, rows, err := stats.Best(ctx, db, be, 10)
 			if err != nil {
 				return err
 			}

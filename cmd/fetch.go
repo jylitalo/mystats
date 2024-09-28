@@ -42,8 +42,7 @@ func fetchCmd() *cobra.Command {
 }
 
 func fetch(ctx context.Context, best_efforts bool) error {
-	tracer := telemetry.GetTracer(ctx)
-	ctx, span := tracer.Start(ctx, "fetch")
+	ctx, span := telemetry.NewSpan(ctx, "fetch")
 	defer span.End()
 
 	status, err := getJsonStatus()
@@ -83,8 +82,7 @@ func getClient() (*api.Client, error) {
 }
 
 func fetchBestEfforts(ctx context.Context, client *api.Client, ids []int64, apiCalls int) error {
-	tracer := telemetry.GetTracer(ctx)
-	ctx, span := tracer.Start(ctx, "fetchfetchBestEfforts")
+	ctx, span := telemetry.NewSpan(ctx, "fetchfetchBestEfforts")
 	defer span.End()
 	if len(ids) == 0 {
 		return errors.New("no stravaIDs found from database")
@@ -168,8 +166,7 @@ func getJsonStatus() (jsonStatus, error) {
 }
 
 func callListActivities(ctx context.Context, client *api.Client, after time.Time) (*api.CurrentAthleteListActivitiesCall, error) {
-	tracer := telemetry.GetTracer(ctx)
-	_, span := tracer.Start(ctx, "callListActivities")
+	_, span := telemetry.NewSpan(ctx, "callListActivities")
 	defer span.End()
 	current := api.NewCurrentAthleteService(client)
 	call := current.ListActivities()
@@ -177,8 +174,7 @@ func callListActivities(ctx context.Context, client *api.Client, after time.Time
 }
 
 func saveActivities(ctx context.Context, call *api.CurrentAthleteListActivitiesCall, prior int) ([]int64, int, error) {
-	tracer := telemetry.GetTracer(ctx)
-	_, span := tracer.Start(ctx, "saveActivities")
+	_, span := telemetry.NewSpan(ctx, "saveActivities")
 	defer span.End()
 	page := 1
 	newIds := []int64{}

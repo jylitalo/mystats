@@ -1,10 +1,12 @@
 package stats
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"strings"
 
+	"github.com/jylitalo/mystats/pkg/telemetry"
 	"github.com/jylitalo/mystats/storage"
 )
 
@@ -15,7 +17,10 @@ type Storage interface {
 	QueryYears(cond storage.SummaryConditions) ([]int, error)
 }
 
-func Stats(db Storage, measure, period string, types, workoutTypes []string, month, day int, years []int) ([]int, [][]string, []string, error) {
+func Stats(ctx context.Context, db Storage, measure, period string, types, workoutTypes []string, month, day int, years []int) ([]int, [][]string, []string, error) {
+	_, span := telemetry.NewSpan(ctx, "stats.Stats")
+	defer span.End()
+
 	inYear := map[string]int{
 		"month": 12,
 		"week":  53,

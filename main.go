@@ -20,8 +20,7 @@ func main() {
 		log.Fatal(err)
 	}
 	defer func() { _ = otel.Shutdown(ctx) }()
-	tracer := telemetry.GetTracer(ctx)
-	ctx, span := tracer.Start(ctx, "start execution")
+	ctx, span := telemetry.NewSpan(ctx, "start execution")
 	defer span.End()
 	if err := cmd.Execute(ctx); err != nil {
 		log.Fatal(err)

@@ -77,15 +77,12 @@ func bestEffortValues(values url.Values) (map[string]bool, error) {
 
 func bestPost(ctx context.Context, page *Page, db Storage) func(c echo.Context) error {
 	return func(c echo.Context) error {
-		var err error
-
-		tracer := telemetry.GetTracer(ctx)
-		_, span := tracer.Start(ctx, "bestPost")
+		_, span := telemetry.NewSpan(ctx, "bestPost")
 		defer span.End()
 		values, errV := c.FormParams()
 		bestEfforts, errB := bestEffortValues(values)
 		limit, errL := strconv.Atoi(c.FormValue("limit"))
-		if err = errors.Join(errV, errB, errL); err != nil {
+		if err := errors.Join(errV, errB, errL); err != nil {
 			log.Fatal(err)
 		}
 		slog.Info("POST /best", "values", values)
@@ -96,7 +93,7 @@ func bestPost(ctx context.Context, page *Page, db Storage) func(c echo.Context) 
 			if !slices.Contains[[]string, string](selected, be) {
 				continue
 			}
-			headers, rows, err := stats.Best(db, be, limit)
+			headers, rows, err := stats.Best(ctx, db, be, limit)
 			if err != nil {
 				return err
 			}
@@ -105,6 +102,6 @@ func bestPost(ctx context.Context, page *Page, db Storage) func(c echo.Context) 
 				Rows:    rows,
 			})
 		}
-		return errors.Join(err, c.Render(200, "best-data", page.Best.Data))
+		return c.Render(200, "best-data", page.Best.Data)
 	}
 }

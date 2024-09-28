@@ -144,8 +144,7 @@ func (sq *Sqlite3) Create() error {
 }
 
 func (sq *Sqlite3) InsertSummary(ctx context.Context, records []SummaryRecord) error {
-	tracer := telemetry.GetTracer(ctx)
-	_, span := tracer.Start(ctx, "InsertSummary")
+	_, span := telemetry.NewSpan(ctx, "InsertSummary")
 	defer span.End()
 	if sq.db == nil {
 		return errors.New("database is nil")
@@ -173,8 +172,7 @@ func (sq *Sqlite3) InsertSummary(ctx context.Context, records []SummaryRecord) e
 }
 
 func (sq *Sqlite3) InsertBestEffort(ctx context.Context, records []BestEffortRecord) error {
-	tracer := telemetry.GetTracer(ctx)
-	_, span := tracer.Start(ctx, "InsertBestEffort")
+	_, span := telemetry.NewSpan(ctx, "InsertBestEffort")
 	defer span.End()
 	if sq.db == nil {
 		return errors.New("database is nil")
@@ -197,8 +195,7 @@ func (sq *Sqlite3) InsertBestEffort(ctx context.Context, records []BestEffortRec
 }
 
 func (sq *Sqlite3) InsertSplit(ctx context.Context, records []SplitRecord) error {
-	tracer := telemetry.GetTracer(ctx)
-	_, span := tracer.Start(ctx, "InsertSplit")
+	_, span := telemetry.NewSpan(ctx, "InsertSplit")
 	defer span.End()
 	if sq.db == nil {
 		return errors.New("database is nil")

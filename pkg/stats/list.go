@@ -1,14 +1,19 @@
 package stats
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"strconv"
 
+	"github.com/jylitalo/mystats/pkg/telemetry"
 	"github.com/jylitalo/mystats/storage"
 )
 
-func List(db Storage, types, workouts []string, years []int, limit int, name string) ([]string, [][]string, error) {
+func List(ctx context.Context, db Storage, types, workouts []string, years []int, limit int, name string) ([]string, [][]string, error) {
+	_, span := telemetry.NewSpan(ctx, "stats.List")
+	defer span.End()
+
 	o := []string{"year", "month", "day"}
 	rows, err := db.QuerySummary(
 		[]string{"year", "month", "day", "name", "distance", "elevation", "elapsedtime", "type", "workouttype", "stravaid"},
@@ -39,9 +44,13 @@ func List(db Storage, types, workouts []string, years []int, limit int, name str
 	return []string{"ID", "Date", "Name", "Distance (km)", "Elevation (m)", "Time", "Type", "Workout Type", "Link"}, results, nil
 }
 
-func Split(db Storage, id int64) ([]string, [][]string, error) {
+func Split(ctx context.Context, db Storage, id int64) ([]string, [][]string, error) {
 	var totalTime int
 	var ascent, descent float64
+
+	_, span := telemetry.NewSpan(ctx, "stats.Split")
+	defer span.End()
+
 	rows, err := db.QuerySplit([]string{"split", "elapsedtime", "elevationdiff"}, id)
 	if err != nil {
 		return nil, nil, fmt.Errorf("query caused: %w", err)

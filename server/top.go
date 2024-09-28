@@ -64,8 +64,7 @@ func topPost(ctx context.Context, page *Page, db Storage) func(c echo.Context) e
 	return func(c echo.Context) error {
 		var err error
 
-		tracer := telemetry.GetTracer(ctx)
-		_, span := tracer.Start(ctx, "topPost")
+		_, span := telemetry.NewSpan(ctx, "topPost")
 		defer span.End()
 		values, errV := c.FormParams()
 		types, errT := typeValues(values)
@@ -85,7 +84,7 @@ func topPost(ctx context.Context, page *Page, db Storage) func(c echo.Context) e
 		tf.Years = years
 		td := &page.Top.Data
 		td.Headers, td.Rows, err = stats.Top(
-			db, tf.Measure, tf.Period, selectedTypes(types),
+			ctx, db, tf.Measure, tf.Period, selectedTypes(types),
 			selectedWorkoutTypes(workoutTypes), tf.Limit, selectedYears(years),
 		)
 		return errors.Join(err, c.Render(200, "top-data", td))

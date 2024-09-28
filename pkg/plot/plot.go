@@ -84,8 +84,7 @@ func Plot(
 	ctx context.Context, db Storage, types, workoutTypes []string, measure string, month, day int,
 	years []int, filename string,
 ) error {
-	tracer := telemetry.GetTracer(ctx)
-	_, span := tracer.Start(ctx, "plot.Plot")
+	_, span := telemetry.NewSpan(ctx, "plot.Plot")
 	defer span.End()
 
 	cond := storage.SummaryConditions{

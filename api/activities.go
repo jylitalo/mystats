@@ -85,8 +85,7 @@ func (as *ActivitySummary) WorkoutType() string {
 }
 
 func NewActivitiesService(ctx context.Context, client *Client) *strava.ActivitiesService {
-	tracer := telemetry.GetTracer(ctx)
-	_, span := tracer.Start(ctx, "api.NewActivitiesService")
+	_, span := telemetry.NewSpan(ctx, "api.NewActivitiesService")
 	defer span.End()
 	stravaClient := strava.NewClient(client.token, client.httpClient)
 	return strava.NewActivitiesService(stravaClient)
