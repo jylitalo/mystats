@@ -64,7 +64,7 @@ func skipDB(db *storage.Sqlite3, fnames []string) bool {
 
 func makeDB(ctx context.Context, update bool) (Storage, error) {
 	tracer := telemetry.GetTracer(ctx)
-	_, span := tracer.Start(ctx, "make")
+	ctx, span := tracer.Start(ctx, "make")
 	defer span.End()
 
 	slog.Info("Fetch activities from Strava")
@@ -109,7 +109,7 @@ func makeDB(ctx context.Context, update bool) (Storage, error) {
 			ElapsedTime: activity.ElapsedTime,
 		})
 	}
-	acts, err := api.ReadActivityJSONs(actFnames)
+	acts, err := api.ReadActivityJSONs(ctx, actFnames)
 	if err != nil {
 		return nil, err
 	}
@@ -138,6 +138,8 @@ func makeDB(ctx context.Context, update bool) (Storage, error) {
 
 		}
 	}
+	ctx, spanDB := tracer.Start(ctx, "rebuildDB")
+	defer spanDB.End()
 	errR := db.Remove()
 	errO := db.Open()
 	errC := db.Create()

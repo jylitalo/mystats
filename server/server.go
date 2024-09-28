@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"html/template"
@@ -15,6 +16,7 @@ import (
 	"github.com/labstack/echo/v4/middleware"
 
 	"github.com/jylitalo/mystats/pkg/stats"
+	"github.com/jylitalo/mystats/pkg/telemetry"
 	"github.com/jylitalo/mystats/storage"
 )
 
@@ -172,7 +174,9 @@ func yearValues(values url.Values) (map[int]bool, error) {
 	return years, nil
 }
 
-func Start(db Storage, selectedTypes []string, port int) error {
+func Start(ctx context.Context, db Storage, selectedTypes []string, port int) error {
+	tracer := telemetry.GetTracer(ctx)
+	_, span := tracer.Start(ctx, "server.start")
 	e := echo.New()
 	e.Renderer = newTemplate("server/views/*.html")
 	e.Use(middleware.Logger())
@@ -215,24 +219,29 @@ func Start(db Storage, selectedTypes []string, port int) error {
 		page.Best.Form.Distances[be] = value
 		value = false
 	}
+	span.End()
 	slog.Info("starting things", "page", page)
 
-	e.GET("/", indexGet(page, db))
-	e.POST("/best", bestPost(page, db))
-	e.POST("/event", listEvent(page, db))
-	e.POST("/list", listPost(page, db))
-	e.POST("/plot", plotPost(page, db))
-	e.POST("/top", topPost(page, db))
+	e.GET("/", indexGet(ctx, page, db))
+	e.POST("/best", bestPost(ctx, page, db))
+	e.POST("/event", listEvent(ctx, page, db))
+	e.POST("/list", listPost(ctx, page, db))
+	e.POST("/plot", plotPost(ctx, page, db))
+	e.POST("/top", topPost(ctx, page, db))
 	e.Logger.Fatal(e.Start(":" + strconv.FormatInt(int64(port), 10)))
 	return nil
 }
 
-func indexGet(page *Page, db Storage) func(c echo.Context) error {
+func indexGet(ctx context.Context, page *Page, db Storage) func(c echo.Context) error {
 	return func(c echo.Context) error {
 		var errL, errT error
+
+		tracer := telemetry.GetTracer(ctx)
+		_, span := tracer.Start(ctx, "indexGet")
+		defer span.End()
 		pf := &page.Plot.Form
 		errP := page.Plot.render(
-			db, pf.Types, pf.WorkoutTypes, pf.EndMonth, pf.EndDay, pf.Years, pf.Period,
+			ctx, db, pf.Types, pf.WorkoutTypes, pf.EndMonth, pf.EndDay, pf.Years, pf.Period,
 		)
 		// init List tab
 		types := selectedTypes(pf.Types)

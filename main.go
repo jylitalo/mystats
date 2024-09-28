@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log"
+	"os"
 
 	"github.com/jylitalo/mystats/cmd"
 	"github.com/jylitalo/mystats/pkg/telemetry"
@@ -10,7 +11,11 @@ import (
 
 func main() {
 	ctx := context.Background()
-	ctx, otel, err := telemetry.SetupConsole(ctx, "github.com/jylitalo/mystats")
+	telemetryName := os.Getenv("MYSTATS_TELEMETRY")
+	if telemetryName == "" {
+		telemetryName = "mystats"
+	}
+	ctx, otel, err := telemetry.Setup(ctx, telemetryName)
 	if err != nil {
 		log.Fatal(err)
 	}

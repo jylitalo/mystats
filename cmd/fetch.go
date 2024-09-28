@@ -43,7 +43,7 @@ func fetchCmd() *cobra.Command {
 
 func fetch(ctx context.Context, best_efforts bool) error {
 	tracer := telemetry.GetTracer(ctx)
-	_, span := tracer.Start(ctx, "fetch")
+	ctx, span := tracer.Start(ctx, "fetch")
 	defer span.End()
 
 	status, err := getJsonStatus()
@@ -54,14 +54,14 @@ func fetch(ctx context.Context, best_efforts bool) error {
 	if err != nil {
 		return err
 	}
-	call, err := callListActivities(client, status.latest)
+	call, err := callListActivities(ctx, client, status.latest)
 	if err != nil {
 		return err
 	}
-	ids, apiCalls, err := saveActivities(call, status.pages)
+	ids, apiCalls, err := saveActivities(ctx, call, status.pages)
 	if err == nil && best_efforts {
 		ids = append(ids, status.ids...)
-		err = fetchBestEfforts(client, ids, apiCalls)
+		err = fetchBestEfforts(ctx, client, ids, apiCalls)
 	}
 	if err != nil && api.IsRateLimitExceeded(err) {
 		slog.Warn("Strava API Rate Limit Exceeded")
@@ -82,7 +82,10 @@ func getClient() (*api.Client, error) {
 	return client, err
 }
 
-func fetchBestEfforts(client *api.Client, ids []int64, apiCalls int) error {
+func fetchBestEfforts(ctx context.Context, client *api.Client, ids []int64, apiCalls int) error {
+	tracer := telemetry.GetTracer(ctx)
+	ctx, span := tracer.Start(ctx, "fetchfetchBestEfforts")
+	defer span.End()
 	if len(ids) == 0 {
 		return errors.New("no stravaIDs found from database")
 	}
@@ -97,7 +100,7 @@ func fetchBestEfforts(client *api.Client, ids []int64, apiCalls int) error {
 		i, _ := strconv.Atoi(intStr)
 		alreadyFetched = append(alreadyFetched, int64(i))
 	}
-	service := api.NewActivitiesService(client)
+	service := api.NewActivitiesService(ctx, client)
 	for idx, id := range ids {
 		if slices.Contains[[]int64, int64](alreadyFetched, id) {
 			continue
@@ -164,13 +167,19 @@ func getJsonStatus() (jsonStatus, error) {
 	return status, nil
 }
 
-func callListActivities(client *api.Client, after time.Time) (*api.CurrentAthleteListActivitiesCall, error) {
+func callListActivities(ctx context.Context, client *api.Client, after time.Time) (*api.CurrentAthleteListActivitiesCall, error) {
+	tracer := telemetry.GetTracer(ctx)
+	_, span := tracer.Start(ctx, "callListActivities")
+	defer span.End()
 	current := api.NewCurrentAthleteService(client)
 	call := current.ListActivities()
 	return call.After(int(after.Unix())), nil
 }
 
-func saveActivities(call *api.CurrentAthleteListActivitiesCall, prior int) ([]int64, int, error) {
+func saveActivities(ctx context.Context, call *api.CurrentAthleteListActivitiesCall, prior int) ([]int64, int, error) {
+	tracer := telemetry.GetTracer(ctx)
+	_, span := tracer.Start(ctx, "saveActivities")
+	defer span.End()
 	page := 1
 	newIds := []int64{}
 	for {

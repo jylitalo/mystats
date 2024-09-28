@@ -4,8 +4,11 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
@@ -21,7 +24,7 @@ func GetTracer(ctx context.Context) trace.Tracer {
 	return ctx.Value(otelCtxKey).(trace.Tracer)
 }
 
-func newExporter(fname string) (sdktrace.SpanExporter, error) {
+func newConsoleExporter(fname string) (sdktrace.SpanExporter, error) {
 	// Your preferred exporter: console, jaeger, zipkin, OTLP, etc.
 	opts := []stdouttrace.Option{}
 	if fname != "" {
@@ -34,13 +37,24 @@ func newExporter(fname string) (sdktrace.SpanExporter, error) {
 	return stdouttrace.New(opts...)
 }
 
+func newOtelExporter(address string) (sdktrace.SpanExporter, error) {
+	return otlptrace.New(
+		context.Background(),
+		otlptracehttp.NewClient(
+			otlptracehttp.WithEndpoint(address),
+			otlptracehttp.WithHeaders(map[string]string{"content-type": "application/json"}),
+			otlptracehttp.WithInsecure(),
+		),
+	)
+}
+
 func newTraceProvider(exp sdktrace.SpanExporter) *sdktrace.TracerProvider {
 	// Ensure default SDK resources and the required service name are set.
 	r, err := resource.Merge(
 		resource.Default(),
 		resource.NewWithAttributes(
 			semconv.SchemaURL,
-			semconv.ServiceName("ExampleService"),
+			semconv.ServiceName("mystats"),
 		),
 	)
 
@@ -54,8 +68,15 @@ func newTraceProvider(exp sdktrace.SpanExporter) *sdktrace.TracerProvider {
 	)
 }
 
-func SetupConsole(ctx context.Context, name string) (context.Context, *sdktrace.TracerProvider, error) {
-	exp, err := newExporter("." + filepath.Base(name) + ".telemetry")
+func Setup(ctx context.Context, name string) (context.Context, *sdktrace.TracerProvider, error) {
+	var newExp func(string) (sdktrace.SpanExporter, error)
+	if strings.Contains(name, ":") {
+		newExp = newOtelExporter
+	} else {
+		newExp = newConsoleExporter
+		name = "." + filepath.Base(name) + ".telemetry"
+	}
+	exp, err := newExp(name)
 	if err != nil {
 		return ctx, nil, err
 	}

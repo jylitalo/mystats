@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"errors"
 	"log"
 	"log/slog"
@@ -10,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/jylitalo/mystats/pkg/stats"
+	"github.com/jylitalo/mystats/pkg/telemetry"
 	"github.com/labstack/echo/v4"
 )
 
@@ -73,10 +75,13 @@ func bestEffortValues(values url.Values) (map[string]bool, error) {
 	return bestEfforts, nil
 }
 
-func bestPost(page *Page, db Storage) func(c echo.Context) error {
+func bestPost(ctx context.Context, page *Page, db Storage) func(c echo.Context) error {
 	return func(c echo.Context) error {
 		var err error
 
+		tracer := telemetry.GetTracer(ctx)
+		_, span := tracer.Start(ctx, "bestPost")
+		defer span.End()
 		values, errV := c.FormParams()
 		bestEfforts, errB := bestEffortValues(values)
 		limit, errL := strconv.Atoi(c.FormValue("limit"))

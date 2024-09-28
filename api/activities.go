@@ -8,9 +8,11 @@ package api
 // - sport_type: TrailRun has type: Run
 // workout_type is integer value that needs separate transformation into string.
 import (
+	"context"
 	"fmt"
 	"time"
 
+	"github.com/jylitalo/mystats/pkg/telemetry"
 	strava "github.com/strava/go.strava"
 )
 
@@ -82,7 +84,10 @@ func (as *ActivitySummary) WorkoutType() string {
 	return fmt.Sprintf("Unknown (%d)", as.WorkoutTypeId)
 }
 
-func NewActivitiesService(client *Client) *strava.ActivitiesService {
+func NewActivitiesService(ctx context.Context, client *Client) *strava.ActivitiesService {
+	tracer := telemetry.GetTracer(ctx)
+	_, span := tracer.Start(ctx, "api.NewActivitiesService")
+	defer span.End()
 	stravaClient := strava.NewClient(client.token, client.httpClient)
 	return strava.NewActivitiesService(stravaClient)
 }

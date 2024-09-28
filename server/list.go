@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -8,6 +9,7 @@ import (
 	"strconv"
 
 	"github.com/jylitalo/mystats/pkg/stats"
+	"github.com/jylitalo/mystats/pkg/telemetry"
 	"github.com/jylitalo/mystats/storage"
 	"github.com/labstack/echo/v4"
 )
@@ -53,10 +55,13 @@ func newListPage() *ListPage {
 	}
 }
 
-func listPost(page *Page, db Storage) func(c echo.Context) error {
+func listPost(ctx context.Context, page *Page, db Storage) func(c echo.Context) error {
 	return func(c echo.Context) error {
 		var err error
 
+		tracer := telemetry.GetTracer(ctx)
+		_, span := tracer.Start(ctx, "listPost")
+		defer span.End()
 		values, errV := c.FormParams()
 		types, errT := typeValues(values)
 		workoutTypes, errW := workoutTypeValues(values)
@@ -75,8 +80,11 @@ func listPost(page *Page, db Storage) func(c echo.Context) error {
 	}
 }
 
-func listEvent(page *Page, db Storage) func(c echo.Context) error {
+func listEvent(ctx context.Context, page *Page, db Storage) func(c echo.Context) error {
 	return func(c echo.Context) error {
+		tracer := telemetry.GetTracer(ctx)
+		_, span := tracer.Start(ctx, "listEvent")
+		defer span.End()
 		id, err := strconv.Atoi(c.FormValue("id"))
 		if err != nil {
 			log.Fatal(err)

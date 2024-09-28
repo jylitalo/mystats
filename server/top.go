@@ -1,12 +1,14 @@
 package server
 
 import (
+	"context"
 	"errors"
 	"log"
 	"log/slog"
 	"strconv"
 
 	"github.com/jylitalo/mystats/pkg/stats"
+	"github.com/jylitalo/mystats/pkg/telemetry"
 	"github.com/labstack/echo/v4"
 )
 
@@ -58,10 +60,13 @@ func newTopPage() *TopPage {
 	}
 }
 
-func topPost(page *Page, db Storage) func(c echo.Context) error {
+func topPost(ctx context.Context, page *Page, db Storage) func(c echo.Context) error {
 	return func(c echo.Context) error {
 		var err error
 
+		tracer := telemetry.GetTracer(ctx)
+		_, span := tracer.Start(ctx, "topPost")
+		defer span.End()
 		values, errV := c.FormParams()
 		types, errT := typeValues(values)
 		workoutTypes, errW := workoutTypeValues(values)

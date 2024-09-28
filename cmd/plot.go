@@ -27,7 +27,7 @@ func plotCmd(types []string) *cobra.Command {
 				return err
 			}
 			defer db.Close()
-			err = plot.Plot(db, types, nil, measurement, month, day, nil, output)
+			err = plot.Plot(cmd.Context(), db, types, nil, measurement, month, day, nil, output)
 			if err != nil {
 				return err
 			}

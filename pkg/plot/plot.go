@@ -1,12 +1,14 @@
 package plot
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
 	"strconv"
 	"time"
 
+	"github.com/jylitalo/mystats/pkg/telemetry"
 	"github.com/jylitalo/mystats/storage"
 	"go-hep.org/x/hep/hplot"
 	"gonum.org/v1/plot"
@@ -78,7 +80,14 @@ func scan(rows *sql.Rows, years []int, measure string) (*numbers, error) {
 	return &numbers{xs: xs, ys: ys, totals: totals, xmax: xmax}, nil
 }
 
-func Plot(db Storage, types, workoutTypes []string, measure string, month, day int, years []int, filename string) error {
+func Plot(
+	ctx context.Context, db Storage, types, workoutTypes []string, measure string, month, day int,
+	years []int, filename string,
+) error {
+	tracer := telemetry.GetTracer(ctx)
+	_, span := tracer.Start(ctx, "plot.Plot")
+	defer span.End()
+
 	cond := storage.SummaryConditions{
 		Types: types, WorkoutTypes: workoutTypes, Month: month, Day: day, Years: years,
 	}

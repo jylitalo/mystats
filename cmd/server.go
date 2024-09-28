@@ -24,7 +24,7 @@ func serverCmd(types []string) *cobra.Command {
 			}
 			defer db.Close()
 			slog.Info("start service", "port", port)
-			return server.Start(db, types, port)
+			return server.Start(cmd.Context(), db, types, port)
 		},
 	}
 	cmd.Flags().Int("port", 8000, "Port number for service")
