@@ -190,7 +190,7 @@ func Start(ctx context.Context, db Storage, selectedTypes []string, port int) er
 	years, errY := db.QueryYears(storage.SummaryConditions{})
 	bestEfforts, errBE := db.QueryBestEffortDistances()
 	if err := errors.Join(errT, errW, errY, errBE); err != nil {
-		return err
+		return telemetry.Error(span, err)
 	}
 	// it is faster to first mark everything false and afterwards change selected one to true,
 	// instead of going through all types and checking on every type, if it is contained in selectedTypes or not.
@@ -237,7 +237,7 @@ func indexGet(ctx context.Context, page *Page, db Storage) func(c echo.Context) 
 	return func(c echo.Context) error {
 		var errL, errT error
 
-		_, span := telemetry.NewSpan(ctx, "indexGet")
+		ctx, span := telemetry.NewSpan(ctx, "indexGET")
 		defer span.End()
 		pf := &page.Plot.Form
 		errP := page.Plot.render(
@@ -255,15 +255,12 @@ func indexGet(ctx context.Context, page *Page, db Storage) func(c echo.Context) 
 		td.Headers, td.Rows, errT = stats.Top(ctx, db, tf.Measure, tf.Period, types, workoutTypes, tf.Limit, years)
 		// init Best tab
 		for _, be := range selectedBestEfforts(page.Best.Form.Distances) {
-			headers, rows, err := stats.Best(ctx, db, be, 10)
-			if err != nil {
-				return err
+			if headers, rows, err := stats.Best(ctx, db, be, 10); err != nil {
+				return telemetry.Error(span, err)
+			} else {
+				page.Best.Data.Data = append(page.Best.Data.Data, TableData{Headers: headers, Rows: rows})
 			}
-			page.Best.Data.Data = append(page.Best.Data.Data, TableData{
-				Headers: headers,
-				Rows:    rows,
-			})
 		}
-		return errors.Join(errP, errL, errT, c.Render(200, "index", page))
+		return telemetry.Error(span, errors.Join(errP, errL, errT, c.Render(200, "index", page)))
 	}
 }

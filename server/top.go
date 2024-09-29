@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"errors"
-	"log"
 	"log/slog"
 	"strconv"
 
@@ -64,7 +63,7 @@ func topPost(ctx context.Context, page *Page, db Storage) func(c echo.Context) e
 	return func(c echo.Context) error {
 		var err error
 
-		_, span := telemetry.NewSpan(ctx, "topPost")
+		ctx, span := telemetry.NewSpan(ctx, "topPOST")
 		defer span.End()
 		values, errV := c.FormParams()
 		types, errT := typeValues(values)
@@ -76,7 +75,7 @@ func topPost(ctx context.Context, page *Page, db Storage) func(c echo.Context) e
 		page.Top.Data.Period = c.FormValue("Period")
 		page.Top.Form.Period = page.Top.Data.Period
 		if err = errors.Join(errV, errT, errW, errY, errL); err != nil {
-			log.Fatal(err)
+			return telemetry.Error(span, err)
 		}
 		page.Top.Form.Limit = limit
 		slog.Info("POST /top", "values", values)
@@ -87,6 +86,6 @@ func topPost(ctx context.Context, page *Page, db Storage) func(c echo.Context) e
 			ctx, db, tf.Measure, tf.Period, selectedTypes(types),
 			selectedWorkoutTypes(workoutTypes), tf.Limit, selectedYears(years),
 		)
-		return errors.Join(err, c.Render(200, "top-data", td))
+		return telemetry.Error(span, errors.Join(err, c.Render(200, "top-data", td)))
 	}
 }

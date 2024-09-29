@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
@@ -86,4 +87,12 @@ func Setup(ctx context.Context, name string) (context.Context, *sdktrace.TracerP
 
 func NewSpan(ctx context.Context, name string) (context.Context, trace.Span) {
 	return ctx.Value(otelCtxKey).(trace.Tracer).Start(ctx, name)
+}
+
+func Error(span trace.Span, err error) error {
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+	}
+	return err
 }

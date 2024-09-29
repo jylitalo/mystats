@@ -38,14 +38,14 @@ func Top(ctx context.Context, db Storage, measure, period string, types, workout
 			Limit:   limit},
 	)
 	if err != nil {
-		return nil, nil, fmt.Errorf("select caused: %w", err)
+		return nil, nil, telemetry.Error(span, fmt.Errorf("select caused: %w", err))
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var year, periodValue int
 		var measureValue float64
 		if err = rows.Scan(&measureValue, &year, &periodValue); err != nil {
-			return nil, nil, err
+			return nil, nil, telemetry.Error(span, err)
 		}
 		value := fmt.Sprintf(unit, measureValue/modifier)
 		periodStr := strconv.FormatInt(int64(periodValue), 10)

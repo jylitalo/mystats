@@ -45,17 +45,14 @@ func fetch(ctx context.Context, best_efforts bool) error {
 	ctx, span := telemetry.NewSpan(ctx, "fetch")
 	defer span.End()
 
-	status, err := getJsonStatus()
-	if err != nil {
-		return err
-	}
-	client, err := getClient()
-	if err != nil {
-		return err
+	status, errS := getJsonStatus()
+	client, errC := getClient()
+	if err := errors.Join(errS, errC); err != nil {
+		return telemetry.Error(span, err)
 	}
 	call, err := callListActivities(ctx, client, status.latest)
 	if err != nil {
-		return err
+		return telemetry.Error(span, err)
 	}
 	ids, apiCalls, err := saveActivities(ctx, call, status.pages)
 	if err == nil && best_efforts {
@@ -66,7 +63,7 @@ func fetch(ctx context.Context, best_efforts bool) error {
 		slog.Warn("Strava API Rate Limit Exceeded")
 		return nil
 	}
-	return err
+	return telemetry.Error(span, err)
 }
 
 func getClient() (*api.Client, error) {
@@ -85,45 +82,41 @@ func fetchBestEfforts(ctx context.Context, client *api.Client, ids []int64, apiC
 	ctx, span := telemetry.NewSpan(ctx, "fetchfetchBestEfforts")
 	defer span.End()
 	if len(ids) == 0 {
-		return errors.New("no stravaIDs found from database")
+		return telemetry.Error(span, errors.New("no stravaIDs found from database"))
 	}
 	_ = os.Mkdir("activities", 0750)
-	actFiles, err := activitiesFiles()
-	if err != nil {
-		return err
-	}
 	alreadyFetched := []int64{}
-	for _, actFile := range actFiles {
-		intStr := strings.Split(strings.Split(actFile, "_")[1], ".")[0]
-		i, _ := strconv.Atoi(intStr)
-		alreadyFetched = append(alreadyFetched, int64(i))
+	if actFiles, err := activitiesFiles(); err != nil {
+		return telemetry.Error(span, err)
+	} else {
+		for _, actFile := range actFiles {
+			intStr := strings.Split(strings.Split(actFile, "_")[1], ".")[0]
+			i, _ := strconv.Atoi(intStr)
+			alreadyFetched = append(alreadyFetched, int64(i))
+		}
 	}
 	service := api.NewActivitiesService(ctx, client)
 	for idx, id := range ids {
 		if slices.Contains[[]int64, int64](alreadyFetched, id) {
 			continue
 		}
-		call := service.Get(id)
-		activity, err := call.Do()
-		if err != nil {
-			return err
+		if activity, err := service.Get(id).Do(); err != nil {
+			return telemetry.Error(span, err)
+		} else if data, err := json.Marshal(activity); err != nil {
+			return telemetry.Error(span, err)
+		} else {
+			fmt.Printf("%s => activities/activity_%d.json ...\n", activity.StartDateLocal, id)
+			if err = os.WriteFile(fmt.Sprintf("activities/activity_%d.json", id), data, 0600); err != nil {
+				return telemetry.Error(span, err)
+			}
 		}
-		j, err := json.Marshal(activity)
-		if err != nil {
-			return err
-		}
-		fmt.Printf("%s => activities/activity_%d.json ...\n", activity.StartDateLocal, id)
-		if err = os.WriteFile(fmt.Sprintf("activities/activity_%d.json", id), j, 0600); err != nil {
-			return err
-		}
-		apiCalls++
-		if apiCalls >= 90 {
+		if apiCalls++; apiCalls >= 90 {
 			slog.Info("Already fetched 90 activities", "left", len(ids)-idx)
 			return nil
 		}
 	}
 	slog.Info("Activity details fetched", "fetched", apiCalls)
-	return err
+	return nil
 }
 
 func activitiesFiles() ([]string, error) {

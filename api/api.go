@@ -95,11 +95,11 @@ func ReadActivityJSONs(ctx context.Context, fnames []string) ([]strava.ActivityD
 	for _, fname := range fnames {
 		body, err := os.ReadFile(filepath.Clean(fname))
 		if err != nil {
-			return acts, err
+			return acts, telemetry.Error(span, err)
 		}
 		activity := strava.ActivityDetailed{}
 		if err = json.Unmarshal(body, &activity); err != nil {
-			return acts, err
+			return acts, telemetry.Error(span, err)
 		}
 		acts = append(acts, activity)
 	}

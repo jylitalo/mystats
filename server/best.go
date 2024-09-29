@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"errors"
-	"log"
 	"log/slog"
 	"net/url"
 	"slices"
@@ -77,13 +76,13 @@ func bestEffortValues(values url.Values) (map[string]bool, error) {
 
 func bestPost(ctx context.Context, page *Page, db Storage) func(c echo.Context) error {
 	return func(c echo.Context) error {
-		_, span := telemetry.NewSpan(ctx, "bestPost")
+		ctx, span := telemetry.NewSpan(ctx, "bestPOST")
 		defer span.End()
 		values, errV := c.FormParams()
 		bestEfforts, errB := bestEffortValues(values)
 		limit, errL := strconv.Atoi(c.FormValue("limit"))
 		if err := errors.Join(errV, errB, errL); err != nil {
-			log.Fatal(err)
+			return telemetry.Error(span, err)
 		}
 		slog.Info("POST /best", "values", values)
 		page.Best.Form.Distances = bestEfforts
@@ -93,15 +92,15 @@ func bestPost(ctx context.Context, page *Page, db Storage) func(c echo.Context) 
 			if !slices.Contains[[]string, string](selected, be) {
 				continue
 			}
-			headers, rows, err := stats.Best(ctx, db, be, limit)
-			if err != nil {
-				return err
+			if headers, rows, err := stats.Best(ctx, db, be, limit); err != nil {
+				return telemetry.Error(span, err)
+			} else {
+				page.Best.Data.Data = append(page.Best.Data.Data, TableData{
+					Headers: headers,
+					Rows:    rows,
+				})
 			}
-			page.Best.Data.Data = append(page.Best.Data.Data, TableData{
-				Headers: headers,
-				Rows:    rows,
-			})
 		}
-		return c.Render(200, "best-data", page.Best.Data)
+		return telemetry.Error(span, c.Render(200, "best-data", page.Best.Data))
 	}
 }

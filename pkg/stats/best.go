@@ -22,7 +22,7 @@ func Best(ctx context.Context, db Storage, distance string, limit int) ([]string
 		distance, &storage.Order{OrderBy: o, Limit: limit},
 	)
 	if err != nil {
-		return nil, nil, fmt.Errorf("query caused: %w", err)
+		return nil, nil, telemetry.Error(span, fmt.Errorf("query caused: %w", err))
 	}
 	defer rows.Close()
 	results := [][]string{}
@@ -32,7 +32,7 @@ func Best(ctx context.Context, db Storage, distance string, limit int) ([]string
 		var name string
 		err = rows.Scan(&year, &month, &day, &name, &distance, &totalTime, &movingTime, &elapsedTime, &stravaID)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, telemetry.Error(span, err)
 		}
 		results = append(results, []string{
 			fmt.Sprintf("%2d.%2d.%d", day, month, year), name,

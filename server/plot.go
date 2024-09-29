@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"errors"
-	"log"
 	"log/slog"
 	"strconv"
 	"time"
@@ -122,7 +121,7 @@ func (p *PlotPage) render(
 
 func plotPost(ctx context.Context, page *Page, db Storage) func(c echo.Context) error {
 	return func(c echo.Context) error {
-		_, span := telemetry.NewSpan(ctx, "plotPost")
+		_, span := telemetry.NewSpan(ctx, "plotPOST")
 		defer span.End()
 		month, errM := strconv.Atoi(c.FormValue("EndMonth"))
 		day, errD := strconv.Atoi(c.FormValue("EndDay"))
@@ -135,12 +134,12 @@ func plotPost(ctx context.Context, page *Page, db Storage) func(c echo.Context) 
 		workoutTypes, errW := workoutTypeValues(values)
 		years, errY := yearValues(values)
 		if err := errors.Join(errM, errD, errV, errT, errW, errY); err != nil {
-			log.Fatal(err)
+			return telemetry.Error(span, err)
 		}
 		slog.Info("POST /plot", "values", values)
-		return errors.Join(
+		return telemetry.Error(span, errors.Join(
 			page.Plot.render(ctx, db, types, workoutTypes, month, day, years, page.Plot.Data.Period),
 			c.Render(200, "plot-data", page.Plot.Data),
-		)
+		))
 	}
 }

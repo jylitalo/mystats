@@ -21,7 +21,7 @@ func List(ctx context.Context, db Storage, types, workouts []string, years []int
 		&storage.Order{GroupBy: o, OrderBy: o, Limit: limit},
 	)
 	if err != nil {
-		return nil, nil, fmt.Errorf("query caused: %w", err)
+		return nil, nil, telemetry.Error(span, fmt.Errorf("query caused: %w", err))
 	}
 	defer rows.Close()
 	results := [][]string{}
@@ -53,7 +53,7 @@ func Split(ctx context.Context, db Storage, id int64) ([]string, [][]string, err
 
 	rows, err := db.QuerySplit([]string{"split", "elapsedtime", "elevationdiff"}, id)
 	if err != nil {
-		return nil, nil, fmt.Errorf("query caused: %w", err)
+		return nil, nil, telemetry.Error(span, fmt.Errorf("query caused: %w", err))
 	}
 	defer rows.Close()
 	results := [][]string{}

@@ -26,7 +26,7 @@ func Stats(ctx context.Context, db Storage, measure, period string, types, worko
 		"week":  53,
 	}
 	if _, ok := inYear[period]; !ok {
-		return nil, nil, nil, fmt.Errorf("unknown period: %s", period)
+		return nil, nil, nil, telemetry.Error(span, fmt.Errorf("unknown period: %s", period))
 	}
 	cond := storage.SummaryConditions{
 		Types: types, WorkoutTypes: workoutTypes, Month: month, Day: day, Years: years,
@@ -34,7 +34,7 @@ func Stats(ctx context.Context, db Storage, measure, period string, types, worko
 	results := make([][]string, inYear[period])
 	years, err := db.QueryYears(cond)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, telemetry.Error(span, err)
 	}
 	yearIndex := map[int]int{}
 	for idx, year := range years {
@@ -55,7 +55,7 @@ func Stats(ctx context.Context, db Storage, measure, period string, types, worko
 		&storage.Order{GroupBy: []string{period, "year"}, OrderBy: []string{period, "year"}},
 	)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("select caused: %w", err)
+		return nil, nil, nil, telemetry.Error(span, fmt.Errorf("select caused: %w", err))
 	}
 	defer rows.Close()
 	totalsAbs := make([]float64, len(years))

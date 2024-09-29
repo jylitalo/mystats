@@ -147,15 +147,15 @@ func (sq *Sqlite3) InsertSummary(ctx context.Context, records []SummaryRecord) e
 	_, span := telemetry.NewSpan(ctx, "InsertSummary")
 	defer span.End()
 	if sq.db == nil {
-		return errors.New("database is nil")
+		return telemetry.Error(span, errors.New("database is nil"))
 	}
 	tx, err := sq.db.Begin()
 	if err != nil {
-		return err
+		return telemetry.Error(span, err)
 	}
 	stmt, err := tx.Prepare(`insert into summary(Year,Month,Day,Week,StravaID,Name,Type,SportType,WorkoutType,Distance,Elevation,ElapsedTime,MovingTime) values (?,?,?,?,?,?,?,?,?,?,?,?,?)`)
 	if err != nil {
-		return fmt.Errorf("insert caused %w", err)
+		return telemetry.Error(span, fmt.Errorf("insert caused %w", err))
 	}
 	defer stmt.Close()
 	for _, r := range records {
@@ -168,53 +168,53 @@ func (sq *Sqlite3) InsertSummary(ctx context.Context, records []SummaryRecord) e
 			return fmt.Errorf("statement execution caused: %w", err)
 		}
 	}
-	return tx.Commit()
+	return telemetry.Error(span, tx.Commit())
 }
 
 func (sq *Sqlite3) InsertBestEffort(ctx context.Context, records []BestEffortRecord) error {
 	_, span := telemetry.NewSpan(ctx, "InsertBestEffort")
 	defer span.End()
 	if sq.db == nil {
-		return errors.New("database is nil")
+		return telemetry.Error(span, errors.New("database is nil"))
 	}
 	tx, err := sq.db.Begin()
 	if err != nil {
-		return err
+		return telemetry.Error(span, err)
 	}
 	stmt, err := tx.Prepare(`insert into BestEffort(StravaID,Name,ElapsedTime,MovingTime,Distance) values (?,?,?,?,?)`)
 	if err != nil {
-		return fmt.Errorf("insert caused %w", err)
+		return telemetry.Error(span, fmt.Errorf("insert caused %w", err))
 	}
 	defer stmt.Close()
 	for _, r := range records {
 		if _, err = stmt.Exec(r.StravaID, r.Name, r.ElapsedTime, r.MovingTime, r.Distance); err != nil {
-			return fmt.Errorf("statement execution caused: %w", err)
+			return telemetry.Error(span, fmt.Errorf("statement execution caused: %w", err))
 		}
 	}
-	return tx.Commit()
+	return telemetry.Error(span, tx.Commit())
 }
 
 func (sq *Sqlite3) InsertSplit(ctx context.Context, records []SplitRecord) error {
 	_, span := telemetry.NewSpan(ctx, "InsertSplit")
 	defer span.End()
 	if sq.db == nil {
-		return errors.New("database is nil")
+		return telemetry.Error(span, errors.New("database is nil"))
 	}
 	tx, err := sq.db.Begin()
 	if err != nil {
-		return err
+		return telemetry.Error(span, err)
 	}
 	stmt, err := tx.Prepare(`insert into Split(StravaID,Split,ElapsedTime,MovingTime,Distance,ElevationDiff) values (?,?,?,?,?,?)`)
 	if err != nil {
-		return fmt.Errorf("insert caused %w", err)
+		return telemetry.Error(span, fmt.Errorf("insert caused %w", err))
 	}
 	defer stmt.Close()
 	for _, r := range records {
 		if _, err = stmt.Exec(r.StravaID, r.Split, r.ElapsedTime, r.MovingTime, r.Distance, r.ElevationDiff); err != nil {
-			return fmt.Errorf("statement execution caused: %w", err)
+			return telemetry.Error(span, fmt.Errorf("statement execution caused: %w", err))
 		}
 	}
-	return tx.Commit()
+	return telemetry.Error(span, tx.Commit())
 }
 
 func sqlQuery(tables []string, fields []string, cond conditions, order *Order) string {

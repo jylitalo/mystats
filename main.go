@@ -23,6 +23,8 @@ func main() {
 	ctx, span := telemetry.NewSpan(ctx, "start execution")
 	defer span.End()
 	if err := cmd.Execute(ctx); err != nil {
+		telemetry.Error(span, err)
+		span.End()
 		log.Fatal(err)
 	}
 }
