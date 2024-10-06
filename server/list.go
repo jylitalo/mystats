@@ -1,13 +1,14 @@
 package server
 
 import (
+	"context"
 	"errors"
 	"fmt"
-	"log"
 	"log/slog"
 	"strconv"
 
 	"github.com/jylitalo/mystats/pkg/stats"
+	"github.com/jylitalo/mystats/pkg/telemetry"
 	"github.com/jylitalo/mystats/storage"
 	"github.com/labstack/echo/v4"
 )
@@ -53,9 +54,12 @@ func newListPage() *ListPage {
 	}
 }
 
-func listPost(page *Page, db Storage) func(c echo.Context) error {
+func listPost(ctx context.Context, page *Page, db Storage) func(c echo.Context) error {
 	return func(c echo.Context) error {
 		var err error
+
+		ctx, span := telemetry.NewSpan(ctx, "listPOST")
+		defer span.End()
 
 		values, errV := c.FormParams()
 		types, errT := typeValues(values)
@@ -64,26 +68,29 @@ func listPost(page *Page, db Storage) func(c echo.Context) error {
 		limit, errL := strconv.Atoi(c.FormValue("limit"))
 		name := c.FormValue("name")
 		if err = errors.Join(errV, errT, errW, errY, errL); err != nil {
-			log.Fatal(err)
+			telemetry.Error(span, err)
 		}
 		slog.Info("POST /list", "values", values)
 		page.List.Form.Years = years
 		page.List.Data.Headers, page.List.Data.Rows, err = stats.List(
-			db, selectedTypes(types), selectedWorkoutTypes(workoutTypes), selectedYears(years), limit, name,
+			ctx, db, selectedTypes(types), selectedWorkoutTypes(workoutTypes), selectedYears(years), limit, name,
 		)
-		return errors.Join(err, c.Render(200, "list-data", page.List.Data))
+		return telemetry.Error(span, errors.Join(err, c.Render(200, "list-data", page.List.Data)))
 	}
 }
 
-func listEvent(page *Page, db Storage) func(c echo.Context) error {
+func listEvent(ctx context.Context, page *Page, db Storage) func(c echo.Context) error {
 	return func(c echo.Context) error {
+		ctx, span := telemetry.NewSpan(ctx, "eventPOST")
+		defer span.End()
+
 		id, err := strconv.Atoi(c.FormValue("id"))
 		if err != nil {
-			log.Fatal(err)
+			return telemetry.Error(span, err)
 		}
 		rows, err := db.QuerySummary([]string{"name", "year", "month", "day"}, storage.SummaryConditions{StravaID: int64(id)}, nil)
 		if err != nil {
-			return err
+			return telemetry.Error(span, err)
 		}
 		defer rows.Close()
 		if !rows.Next() {
@@ -91,10 +98,10 @@ func listEvent(page *Page, db Storage) func(c echo.Context) error {
 		}
 		var year, month, day int
 		if err = rows.Scan(&page.List.Event.Name, &year, &month, &day); err != nil {
-			return err
+			return telemetry.Error(span, err)
 		}
 		page.List.Event.Date = fmt.Sprintf("%d.%d.%d", day, month, year)
-		page.List.Event.Headers, page.List.Event.Rows, err = stats.Split(db, int64(id))
+		page.List.Event.Headers, page.List.Event.Rows, err = stats.Split(ctx, db, int64(id))
 		return errors.Join(err, c.Render(200, "list-event", page.List.Event))
 	}
 }

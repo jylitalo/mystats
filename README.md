@@ -58,3 +58,12 @@
 | 56.1km        | 2019 |   21 |
 +---------------+------+------+
 ```
+
+## Telemetry
+
+To start Jaeger:
+`docker run --rm --name jaeger -e COLLECTOR_ZIPKIN_HOST_PORT=:9411 -p 16686:16686 -p 4318:4318 jaegertracing/all-in-one:latest`
+
+To send telemetry to Jaeger:
+`MYSTATS_TELEMETRY=localhost:4318 mystats server`
+

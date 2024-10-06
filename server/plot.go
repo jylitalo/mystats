@@ -1,12 +1,12 @@
 package server
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"html/template"
-	"log"
 	"log/slog"
 	"slices"
 	"strconv"
@@ -16,6 +16,7 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"github.com/jylitalo/mystats/pkg/stats"
+	"github.com/jylitalo/mystats/pkg/telemetry"
 	"github.com/jylitalo/mystats/storage"
 )
 
@@ -57,7 +58,10 @@ type PlotData struct {
 	ScriptRows    template.JS
 	ScriptColors  template.JS
 	Period        string
-	stats         func(db stats.Storage, measure, period string, types, workoutTypes []string, month, day int, years []int) ([]int, [][]string, []string, error)
+	stats         func(
+		ctx context.Context, db stats.Storage, measure, period string, types, workoutTypes []string,
+		month, day int, years []int,
+	) ([]int, [][]string, []string, error)
 }
 
 func newPlotData() PlotData {
@@ -81,9 +85,12 @@ func newPlotPage() *PlotPage {
 }
 
 func (p *PlotPage) render(
-	db Storage, types, workoutTypes map[string]bool, month, day int, years map[int]bool,
-	period string,
+	ctx context.Context, db Storage, types, workoutTypes map[string]bool, month, day int,
+	years map[int]bool, period string,
 ) error {
+	ctx, span := telemetry.NewSpan(ctx, "plot.render")
+	defer span.End()
+
 	colors := []string{
 		"#0000ff", // 1
 		"#00ff00", // 2
@@ -97,7 +104,6 @@ func (p *PlotPage) render(
 		"#00f000",
 		"#0000f0",
 	}
-
 	p.Form.EndMonth = month
 	p.Form.EndDay = day
 	p.Form.Years = years
@@ -141,7 +147,7 @@ func (p *PlotPage) render(
 		measure = "elapsedtime"
 	}
 	d.Years, d.Stats, d.Totals, err = d.stats(
-		db, "sum("+measure+")", period, checkedTypes, checkedWorkoutTypes,
+		ctx, db, "sum("+measure+")", period, checkedTypes, checkedWorkoutTypes,
 		month, day, foundYears,
 	)
 	if err != nil {
@@ -152,8 +158,10 @@ func (p *PlotPage) render(
 
 type numbers map[int][]float64
 
-func plotPost(page *Page, db Storage) func(c echo.Context) error {
+func plotPost(ctx context.Context, page *Page, db Storage) func(c echo.Context) error {
 	return func(c echo.Context) error {
+		_, span := telemetry.NewSpan(ctx, "plotPOST")
+		defer span.End()
 		month, errM := strconv.Atoi(c.FormValue("EndMonth"))
 		day, errD := strconv.Atoi(c.FormValue("EndDay"))
 		page.Plot.Form.Measure = c.FormValue("Measure")
@@ -165,13 +173,13 @@ func plotPost(page *Page, db Storage) func(c echo.Context) error {
 		workoutTypes, errW := workoutTypeValues(values)
 		years, errY := yearValues(values)
 		if err := errors.Join(errM, errD, errV, errT, errW, errY); err != nil {
-			log.Fatal(err)
+			return telemetry.Error(span, err)
 		}
 		slog.Info("POST /plot", "values", values)
-		return errors.Join(
-			page.Plot.render(db, types, workoutTypes, month, day, years, page.Plot.Data.Period),
+		return telemetry.Error(span, errors.Join(
+			page.Plot.render(ctx, db, types, workoutTypes, month, day, years, page.Plot.Data.Period),
 			c.Render(200, "plot-data", page.Plot.Data),
-		)
+		))
 	}
 }
 

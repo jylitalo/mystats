@@ -1,10 +1,12 @@
 package stats
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"strings"
 
+	"github.com/jylitalo/mystats/pkg/telemetry"
 	"github.com/jylitalo/mystats/storage"
 )
 
@@ -15,13 +17,16 @@ type Storage interface {
 	QueryYears(cond storage.SummaryConditions) ([]int, error)
 }
 
-func Stats(db Storage, measure, period string, types, workoutTypes []string, month, day int, years []int) ([]int, [][]string, []string, error) {
+func Stats(ctx context.Context, db Storage, measure, period string, types, workoutTypes []string, month, day int, years []int) ([]int, [][]string, []string, error) {
+	_, span := telemetry.NewSpan(ctx, "stats.Stats")
+	defer span.End()
+
 	inYear := map[string]int{
 		"month": 12,
 		"week":  53,
 	}
 	if _, ok := inYear[period]; !ok {
-		return nil, nil, nil, fmt.Errorf("unknown period: %s", period)
+		return nil, nil, nil, telemetry.Error(span, fmt.Errorf("unknown period: %s", period))
 	}
 	cond := storage.SummaryConditions{
 		Types: types, WorkoutTypes: workoutTypes, Month: month, Day: day, Years: years,
@@ -29,7 +34,7 @@ func Stats(db Storage, measure, period string, types, workoutTypes []string, mon
 	results := make([][]string, inYear[period])
 	years, err := db.QueryYears(cond)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, telemetry.Error(span, err)
 	}
 	yearIndex := map[int]int{}
 	for idx, year := range years {
@@ -50,7 +55,7 @@ func Stats(db Storage, measure, period string, types, workoutTypes []string, mon
 		&storage.Order{GroupBy: []string{period, "year"}, OrderBy: []string{period, "year"}},
 	)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("select caused: %w", err)
+		return nil, nil, nil, telemetry.Error(span, fmt.Errorf("select caused: %w", err))
 	}
 	defer rows.Close()
 	totalsAbs := make([]float64, len(years))

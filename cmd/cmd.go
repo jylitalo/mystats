@@ -1,11 +1,13 @@
 package cmd
 
 import (
+	"context"
+
 	"github.com/jylitalo/mystats/config"
 	"github.com/spf13/cobra"
 )
 
-func Execute() error {
+func Execute(ctx context.Context) error {
 	rootCmd := &cobra.Command{
 		Use:   "mystats",
 		Short: "mystats is tool for fetching your Strava results to your machine",
@@ -19,5 +21,5 @@ func Execute() error {
 		bestCmd(), listCmd(types), statsCmd(types), topCmd(types),
 		serverCmd(types),
 	)
-	return rootCmd.Execute()
+	return rootCmd.ExecuteContext(ctx)
 }

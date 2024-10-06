@@ -3,6 +3,7 @@ package server
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"database/sql"
 	"testing"
 
@@ -42,10 +43,13 @@ func (t *testDB) QueryYears(cond storage.SummaryConditions) ([]int, error) {
 
 func TestTemplateRender(t *testing.T) {
 	p := newPage()
-	p.Plot.Data.stats = func(db stats.Storage, measurement, period string, types, workoutTypes []string, month, day int, years []int) ([]int, [][]string, []string, error) {
+	p.Plot.Data.stats = func(
+		ctx context.Context, db stats.Storage, measurement, period string, types, workoutTypes []string,
+		month, day int, years []int,
+	) ([]int, [][]string, []string, error) {
 		return nil, nil, nil, nil
 	}
-	err := p.Plot.render(&testDB{}, map[string]bool{"Run": true}, nil, 6, 12, map[int]bool{2024: true}, "month")
+	err := p.Plot.render(context.TODO(), &testDB{}, map[string]bool{"Run": true}, nil, 6, 12, map[int]bool{2024: true}, "month")
 	if err != nil {
 		t.Error(err)
 	}

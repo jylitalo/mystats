@@ -16,7 +16,7 @@
     </div>
     <div id="list-limit">
         <b>Number of activities:</b>
-        <select name="limit" hx-swap="outerHTML" hx-target="#list-event" hx-post="/list">
+        <select name="limit" hx-swap="outerHTML" hx-target="#list-data" hx-post="/list">
             <option{{ if eq .Limit 10 }} selected{{ end }}>10</option>
             <option{{ if eq .Limit 20 }} selected{{ end }}>20</option>
             <option{{ if eq .Limit 100 }} selected{{ end }}>100</option>

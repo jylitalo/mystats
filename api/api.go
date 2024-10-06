@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -10,6 +11,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/jylitalo/mystats/pkg/telemetry"
 	strava "github.com/strava/go.strava"
 )
 
@@ -85,16 +87,19 @@ func (cfg *Config) Refresh() (*Config, bool, error) {
 	return &tokens, true, nil
 }
 
-func ReadActivityJSONs(fnames []string) ([]strava.ActivityDetailed, error) {
+func ReadActivityJSONs(ctx context.Context, fnames []string) ([]strava.ActivityDetailed, error) {
+	_, span := telemetry.NewSpan(ctx, "api.ReadActivityJSONs")
+	defer span.End()
+
 	acts := []strava.ActivityDetailed{}
 	for _, fname := range fnames {
 		body, err := os.ReadFile(filepath.Clean(fname))
 		if err != nil {
-			return acts, err
+			return acts, telemetry.Error(span, err)
 		}
 		activity := strava.ActivityDetailed{}
 		if err = json.Unmarshal(body, &activity); err != nil {
-			return acts, err
+			return acts, telemetry.Error(span, err)
 		}
 		acts = append(acts, activity)
 	}
