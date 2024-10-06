@@ -1,8 +1,8 @@
 package server
 
 import (
+	"context"
 	"errors"
-	"log"
 	"log/slog"
 	"strconv"
 	"time"
@@ -12,6 +12,7 @@ import (
 
 	"github.com/jylitalo/mystats/pkg/plot"
 	"github.com/jylitalo/mystats/pkg/stats"
+	"github.com/jylitalo/mystats/pkg/telemetry"
 )
 
 type PlotFormData struct {
@@ -50,8 +51,14 @@ type PlotData struct {
 	Totals   []string
 	Filename string
 	Period   string
-	plot     func(db plot.Storage, types, workoutTypes []string, measure string, month, day int, years []int, filename string) error
-	stats    func(db stats.Storage, measure, period string, types, workoutTypes []string, month, day int, years []int) ([]int, [][]string, []string, error)
+	plot     func(
+		ctx context.Context, db plot.Storage, types, workoutTypes []string, measure string,
+		month, day int, years []int, filename string,
+	) error
+	stats func(
+		ctx context.Context, db stats.Storage, measure, period string, types, workoutTypes []string,
+		month, day int, years []int,
+	) ([]int, [][]string, []string, error)
 }
 
 func newPlotData() PlotData {
@@ -76,9 +83,12 @@ func newPlotPage() *PlotPage {
 }
 
 func (p *PlotPage) render(
-	db Storage, types, workoutTypes map[string]bool, month, day int, years map[int]bool,
-	period string,
+	ctx context.Context, db Storage, types, workoutTypes map[string]bool, month, day int,
+	years map[int]bool, period string,
 ) error {
+	ctx, span := telemetry.NewSpan(ctx, "plot.render")
+	defer span.End()
+
 	p.Form.EndMonth = month
 	p.Form.EndDay = day
 	p.Form.Years = years
@@ -88,8 +98,8 @@ func (p *PlotPage) render(
 	d := &p.Data
 	d.Filename = "cache/plot-" + uuid.NewString() + ".png"
 	err := d.plot(
-		db, checkedTypes, checkedWorkoutTypes, d.Measure, month, day, checkedYears,
-		"server/"+d.Filename,
+		ctx, db, checkedTypes, checkedWorkoutTypes, d.Measure, month, day,
+		checkedYears, "server/"+d.Filename,
 	)
 	if err != nil {
 		slog.Error("failed to plot", "err", err)
@@ -100,7 +110,7 @@ func (p *PlotPage) render(
 		measure = "elapsedtime"
 	}
 	d.Years, d.Stats, d.Totals, err = d.stats(
-		db, "sum("+measure+")", period, checkedTypes, checkedWorkoutTypes,
+		ctx, db, "sum("+measure+")", period, checkedTypes, checkedWorkoutTypes,
 		month, day, checkedYears,
 	)
 	if err != nil {
@@ -109,8 +119,10 @@ func (p *PlotPage) render(
 	return err
 }
 
-func plotPost(page *Page, db Storage) func(c echo.Context) error {
+func plotPost(ctx context.Context, page *Page, db Storage) func(c echo.Context) error {
 	return func(c echo.Context) error {
+		_, span := telemetry.NewSpan(ctx, "plotPOST")
+		defer span.End()
 		month, errM := strconv.Atoi(c.FormValue("EndMonth"))
 		day, errD := strconv.Atoi(c.FormValue("EndDay"))
 		page.Plot.Data.Measure = c.FormValue("Measure")
@@ -122,12 +134,12 @@ func plotPost(page *Page, db Storage) func(c echo.Context) error {
 		workoutTypes, errW := workoutTypeValues(values)
 		years, errY := yearValues(values)
 		if err := errors.Join(errM, errD, errV, errT, errW, errY); err != nil {
-			log.Fatal(err)
+			return telemetry.Error(span, err)
 		}
 		slog.Info("POST /plot", "values", values)
-		return errors.Join(
-			page.Plot.render(db, types, workoutTypes, month, day, years, page.Plot.Data.Period),
+		return telemetry.Error(span, errors.Join(
+			page.Plot.render(ctx, db, types, workoutTypes, month, day, years, page.Plot.Data.Period),
 			c.Render(200, "plot-data", page.Plot.Data),
-		)
+		))
 	}
 }

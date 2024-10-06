@@ -1,8 +1,8 @@
 package server
 
 import (
+	"context"
 	"errors"
-	"log"
 	"log/slog"
 	"net/url"
 	"slices"
@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/jylitalo/mystats/pkg/stats"
+	"github.com/jylitalo/mystats/pkg/telemetry"
 	"github.com/labstack/echo/v4"
 )
 
@@ -73,15 +74,15 @@ func bestEffortValues(values url.Values) (map[string]bool, error) {
 	return bestEfforts, nil
 }
 
-func bestPost(page *Page, db Storage) func(c echo.Context) error {
+func bestPost(ctx context.Context, page *Page, db Storage) func(c echo.Context) error {
 	return func(c echo.Context) error {
-		var err error
-
+		ctx, span := telemetry.NewSpan(ctx, "bestPOST")
+		defer span.End()
 		values, errV := c.FormParams()
 		bestEfforts, errB := bestEffortValues(values)
 		limit, errL := strconv.Atoi(c.FormValue("limit"))
-		if err = errors.Join(errV, errB, errL); err != nil {
-			log.Fatal(err)
+		if err := errors.Join(errV, errB, errL); err != nil {
+			return telemetry.Error(span, err)
 		}
 		slog.Info("POST /best", "values", values)
 		page.Best.Form.Distances = bestEfforts
@@ -91,15 +92,15 @@ func bestPost(page *Page, db Storage) func(c echo.Context) error {
 			if !slices.Contains[[]string, string](selected, be) {
 				continue
 			}
-			headers, rows, err := stats.Best(db, be, limit)
-			if err != nil {
-				return err
+			if headers, rows, err := stats.Best(ctx, db, be, limit); err != nil {
+				return telemetry.Error(span, err)
+			} else {
+				page.Best.Data.Data = append(page.Best.Data.Data, TableData{
+					Headers: headers,
+					Rows:    rows,
+				})
 			}
-			page.Best.Data.Data = append(page.Best.Data.Data, TableData{
-				Headers: headers,
-				Rows:    rows,
-			})
 		}
-		return errors.Join(err, c.Render(200, "best-data", page.Best.Data))
+		return telemetry.Error(span, c.Render(200, "best-data", page.Best.Data))
 	}
 }

@@ -22,16 +22,16 @@ func plotCmd(types []string) *cobra.Command {
 			update, _ := flags.GetBool("update")
 			month, _ := flags.GetInt("month")
 			day, _ := flags.GetInt("day")
-			db, err := makeDB(update)
+			db, err := makeDB(cmd.Context(), update)
 			if err != nil {
 				return err
 			}
 			defer db.Close()
-			err = plot.Plot(db, types, nil, measurement, month, day, nil, output)
+			err = plot.Plot(cmd.Context(), db, types, nil, measurement, month, day, nil, output)
 			if err != nil {
 				return err
 			}
-			slog.Info("Plat created", "output", output)
+			slog.Info("Plot created", "output", output)
 			return nil
 		},
 	}

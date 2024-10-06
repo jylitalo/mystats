@@ -1,12 +1,17 @@
 package stats
 
 import (
+	"context"
 	"fmt"
 
+	"github.com/jylitalo/mystats/pkg/telemetry"
 	"github.com/jylitalo/mystats/storage"
 )
 
-func Best(db Storage, distance string, limit int) ([]string, [][]string, error) {
+func Best(ctx context.Context, db Storage, distance string, limit int) ([]string, [][]string, error) {
+	_, span := telemetry.NewSpan(ctx, "stats.Best")
+	defer span.End()
+
 	o := []string{"besteffort.movingtime", "year", "month", "day"}
 	rows, err := db.QueryBestEffort(
 		[]string{
@@ -17,7 +22,7 @@ func Best(db Storage, distance string, limit int) ([]string, [][]string, error) 
 		distance, &storage.Order{OrderBy: o, Limit: limit},
 	)
 	if err != nil {
-		return nil, nil, fmt.Errorf("query caused: %w", err)
+		return nil, nil, telemetry.Error(span, fmt.Errorf("query caused: %w", err))
 	}
 	defer rows.Close()
 	results := [][]string{}
@@ -27,7 +32,7 @@ func Best(db Storage, distance string, limit int) ([]string, [][]string, error) 
 		var name string
 		err = rows.Scan(&year, &month, &day, &name, &distance, &totalTime, &movingTime, &elapsedTime, &stravaID)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, telemetry.Error(span, err)
 		}
 		results = append(results, []string{
 			fmt.Sprintf("%2d.%2d.%d", day, month, year), name,

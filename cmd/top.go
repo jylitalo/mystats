@@ -56,12 +56,13 @@ func topCmd(types []string) *cobra.Command {
 			if _, ok := formatFn[format]; !ok {
 				return fmt.Errorf("unknown format: %s", format)
 			}
-			db, err := makeDB(update)
+			ctx := cmd.Context()
+			db, err := makeDB(ctx, update)
 			if err != nil {
 				return err
 			}
 			defer db.Close()
-			headers, results, err := stats.Top(db, measurement, period, types, nil, limit, nil)
+			headers, results, err := stats.Top(ctx, db, measurement, period, types, nil, limit, nil)
 			if err != nil {
 				return err
 			}

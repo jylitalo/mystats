@@ -1,13 +1,14 @@
 package plot
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
-	"log/slog"
 	"strconv"
 	"time"
 
+	"github.com/jylitalo/mystats/pkg/telemetry"
 	"github.com/jylitalo/mystats/storage"
 	"go-hep.org/x/hep/hplot"
 	"gonum.org/v1/plot"
@@ -79,31 +80,14 @@ func scan(rows *sql.Rows, years []int, measure string) (*numbers, error) {
 	return &numbers{xs: xs, ys: ys, totals: totals, xmax: xmax}, nil
 }
 
-func Plot(db Storage, types, workoutTypes []string, measure string, month, day int, years []int, filename string) error {
-	cond := storage.SummaryConditions{
-		Types: types, WorkoutTypes: workoutTypes, Month: month, Day: day, Years: years,
-	}
-	years, err := db.QueryYears(cond)
-	if err != nil {
-		return err
-	}
-	o := []string{"year", "month", "day"}
-	m := measure
-	if m == "time" {
-		m = "elapsedtime"
-	}
-	rows, err := db.QuerySummary(
-		[]string{"year", "month", "day", "sum(" + m + ")"},
-		cond, &storage.Order{GroupBy: o, OrderBy: o},
-	)
-	if err != nil {
-		return fmt.Errorf("select caused: %w", err)
-	}
-	defer rows.Close()
-	numbers, err := scan(rows, years, measure)
-	if err != nil {
-		return err
-	}
+func Plot(
+	ctx context.Context, db Storage, types, workoutTypes []string, measure string, month, day int,
+	years []int, filename string,
+) error {
+	_, span := telemetry.NewSpan(ctx, "plot.Plot")
+	defer span.End()
+
+	yearLines := []interface{}{}
 	p := plot.New()
 	p.X.Label.Text = "date"
 	ticks := []plot.Tick{
@@ -125,20 +109,39 @@ func Plot(db Storage, types, workoutTypes []string, measure string, month, day i
 	p.X.Tick.Label.XAlign = text.XLeft
 	p.Y.Label.Text = measure
 	p.X.Min = 0
-	p.X.Max = numbers.xmax
 	p.Y.Min = 0
-	yearLines := []interface{}{}
-	for _, year := range years {
-		yearLines = append(yearLines, strconv.FormatInt(int64(year), 10), hplot.ZipXY(numbers.xs[year], numbers.ys[year]))
+
+	cond := storage.SummaryConditions{
+		Types: types, WorkoutTypes: workoutTypes,
+		Month: month, Day: day, Years: years,
 	}
-	err = plotutil.AddLines(p, yearLines...)
+	years, err := db.QueryYears(cond)
 	if err != nil {
-		return errors.New("failed to plot years")
+		return telemetry.Error(span, err)
 	}
-	err = p.Save(40*vg.Centimeter, 20*vg.Centimeter, filename)
+	m := measure
+	if m == "time" {
+		m = "elapsedtime"
+	}
+	f := []string{"year", "month", "day", "sum(" + m + ")"}
+	o := []string{"year", "month", "day"}
+	rows, err := db.QuerySummary(f, cond, &storage.Order{GroupBy: o, OrderBy: o})
 	if err != nil {
-		return errors.New("failed to save image")
+		return fmt.Errorf("select caused: %w", err)
 	}
-	slog.Info("Plat created", "filename", filename)
+	defer rows.Close()
+	if numbers, err := scan(rows, years, measure); err != nil {
+		return telemetry.Error(span, err)
+	} else {
+		p.X.Max = numbers.xmax
+		for _, year := range years {
+			yearLines = append(yearLines, strconv.FormatInt(int64(year), 10), hplot.ZipXY(numbers.xs[year], numbers.ys[year]))
+		}
+	}
+	if err = plotutil.AddLines(p, yearLines...); err != nil {
+		return telemetry.Error(span, errors.New("failed to plot years"))
+	} else if err = p.Save(40*vg.Centimeter, 20*vg.Centimeter, filename); err != nil {
+		return telemetry.Error(span, errors.New("failed to save image"))
+	}
 	return nil
 }

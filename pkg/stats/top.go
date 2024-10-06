@@ -1,15 +1,20 @@
 package stats
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/jylitalo/mystats/pkg/telemetry"
 	"github.com/jylitalo/mystats/storage"
 )
 
-func Top(db Storage, measure, period string, types, workoutTypes []string, limit int, years []int) ([]string, [][]string, error) {
+func Top(ctx context.Context, db Storage, measure, period string, types, workoutTypes []string, limit int, years []int) ([]string, [][]string, error) {
+	_, span := telemetry.NewSpan(ctx, "stats.Top")
+	defer span.End()
+
 	modifier := float64(1)
 	unit := "%4.0fm"
 	switch {
@@ -33,14 +38,14 @@ func Top(db Storage, measure, period string, types, workoutTypes []string, limit
 			Limit:   limit},
 	)
 	if err != nil {
-		return nil, nil, fmt.Errorf("select caused: %w", err)
+		return nil, nil, telemetry.Error(span, fmt.Errorf("select caused: %w", err))
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var year, periodValue int
 		var measureValue float64
 		if err = rows.Scan(&measureValue, &year, &periodValue); err != nil {
-			return nil, nil, err
+			return nil, nil, telemetry.Error(span, err)
 		}
 		value := fmt.Sprintf(unit, measureValue/modifier)
 		periodStr := strconv.FormatInt(int64(periodValue), 10)

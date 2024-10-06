@@ -1,12 +1,14 @@
 package server
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"html/template"
 	"io"
 	"log/slog"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -15,6 +17,7 @@ import (
 	"github.com/labstack/echo/v4/middleware"
 
 	"github.com/jylitalo/mystats/pkg/stats"
+	"github.com/jylitalo/mystats/pkg/telemetry"
 	"github.com/jylitalo/mystats/storage"
 )
 
@@ -172,10 +175,12 @@ func yearValues(values url.Values) (map[int]bool, error) {
 	return years, nil
 }
 
-func Start(db Storage, selectedTypes []string, port int) error {
+func Start(ctx context.Context, db Storage, selectedTypes []string, port int) error {
+	_, span := telemetry.NewSpan(ctx, "server.start")
 	e := echo.New()
 	e.Renderer = newTemplate("server/views/*.html")
 	e.Use(middleware.Logger())
+	os.MkdirAll("server/cache", 0755)
 	e.Static("/cache", "server/cache")
 	e.Static("/css", "server/css")
 
@@ -185,7 +190,7 @@ func Start(db Storage, selectedTypes []string, port int) error {
 	years, errY := db.QueryYears(storage.SummaryConditions{})
 	bestEfforts, errBE := db.QueryBestEffortDistances()
 	if err := errors.Join(errT, errW, errY, errBE); err != nil {
-		return err
+		return telemetry.Error(span, err)
 	}
 	// it is faster to first mark everything false and afterwards change selected one to true,
 	// instead of going through all types and checking on every type, if it is contained in selectedTypes or not.
@@ -215,46 +220,47 @@ func Start(db Storage, selectedTypes []string, port int) error {
 		page.Best.Form.Distances[be] = value
 		value = false
 	}
+	span.End()
 	slog.Info("starting things", "page", page)
 
-	e.GET("/", indexGet(page, db))
-	e.POST("/best", bestPost(page, db))
-	e.POST("/event", listEvent(page, db))
-	e.POST("/list", listPost(page, db))
-	e.POST("/plot", plotPost(page, db))
-	e.POST("/top", topPost(page, db))
+	e.GET("/", indexGet(ctx, page, db))
+	e.POST("/best", bestPost(ctx, page, db))
+	e.POST("/event", listEvent(ctx, page, db))
+	e.POST("/list", listPost(ctx, page, db))
+	e.POST("/plot", plotPost(ctx, page, db))
+	e.POST("/top", topPost(ctx, page, db))
 	e.Logger.Fatal(e.Start(":" + strconv.FormatInt(int64(port), 10)))
 	return nil
 }
 
-func indexGet(page *Page, db Storage) func(c echo.Context) error {
+func indexGet(ctx context.Context, page *Page, db Storage) func(c echo.Context) error {
 	return func(c echo.Context) error {
 		var errL, errT error
+
+		ctx, span := telemetry.NewSpan(ctx, "indexGET")
+		defer span.End()
 		pf := &page.Plot.Form
 		errP := page.Plot.render(
-			db, pf.Types, pf.WorkoutTypes, pf.EndMonth, pf.EndDay, pf.Years, pf.Period,
+			ctx, db, pf.Types, pf.WorkoutTypes, pf.EndMonth, pf.EndDay, pf.Years, pf.Period,
 		)
 		// init List tab
 		types := selectedTypes(pf.Types)
 		workoutTypes := selectedWorkoutTypes(pf.WorkoutTypes)
 		years := selectedYears(pf.Years)
 		pld := &page.List.Data
-		pld.Headers, pld.Rows, errL = stats.List(db, types, workoutTypes, years, page.List.Form.Limit, "")
+		pld.Headers, pld.Rows, errL = stats.List(ctx, db, types, workoutTypes, years, page.List.Form.Limit, "")
 		// init Top tab
 		tf := &page.Top.Form
 		td := &page.Top.Data
-		td.Headers, td.Rows, errT = stats.Top(db, tf.Measure, tf.Period, types, workoutTypes, tf.Limit, years)
+		td.Headers, td.Rows, errT = stats.Top(ctx, db, tf.Measure, tf.Period, types, workoutTypes, tf.Limit, years)
 		// init Best tab
 		for _, be := range selectedBestEfforts(page.Best.Form.Distances) {
-			headers, rows, err := stats.Best(db, be, 10)
-			if err != nil {
-				return err
+			if headers, rows, err := stats.Best(ctx, db, be, 10); err != nil {
+				return telemetry.Error(span, err)
+			} else {
+				page.Best.Data.Data = append(page.Best.Data.Data, TableData{Headers: headers, Rows: rows})
 			}
-			page.Best.Data.Data = append(page.Best.Data.Data, TableData{
-				Headers: headers,
-				Rows:    rows,
-			})
 		}
-		return errors.Join(errP, errL, errT, c.Render(200, "index", page))
+		return telemetry.Error(span, errors.Join(errP, errL, errT, c.Render(200, "index", page)))
 	}
 }

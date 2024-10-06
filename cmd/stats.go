@@ -76,12 +76,13 @@ func statsCmd(types []string) *cobra.Command {
 			if _, ok := formatFn[format]; !ok {
 				return fmt.Errorf("unknown format: %s", format)
 			}
-			db, err := makeDB(update)
+			ctx := cmd.Context()
+			db, err := makeDB(ctx, update)
 			if err != nil {
 				return err
 			}
 			defer db.Close()
-			years, results, totals, err := stats.Stats(db, measurement, period, types, nil, month, day, nil)
+			years, results, totals, err := stats.Stats(ctx, db, measurement, period, types, nil, month, day, nil)
 			if err != nil {
 				return err
 			}

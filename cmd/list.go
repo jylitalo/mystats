@@ -22,13 +22,14 @@ func listCmd(types []string) *cobra.Command {
 			types, _ := flags.GetStringSlice("type")
 			update, _ := flags.GetBool("update")
 			workouts, _ := flags.GetStringSlice("workout")
-			db, err := makeDB(update)
+			ctx := cmd.Context()
+			db, err := makeDB(ctx, update)
 			if err != nil {
 				return err
 			}
 			defer db.Close()
 			table := tablewriter.NewWriter(os.Stdout)
-			headers, results, err := stats.List(db, types, workouts, nil, limit, name)
+			headers, results, err := stats.List(ctx, db, types, workouts, nil, limit, name)
 			if err != nil {
 				return err
 			}
