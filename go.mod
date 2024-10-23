@@ -3,7 +3,6 @@ module github.com/jylitalo/mystats
 go 1.22.1
 
 require (
-	github.com/google/uuid v1.6.0
 	github.com/labstack/echo/v4 v4.12.0
 	github.com/mattn/go-sqlite3 v1.14.22
 	github.com/olekukonko/tablewriter v0.0.5
@@ -34,6 +33,7 @@ require (
 	github.com/golang-jwt/jwt v3.2.2+incompatible // indirect
 	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0 // indirect
 	github.com/gonuts/binary v0.2.0 // indirect
+	github.com/google/uuid v1.6.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.22.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/labstack/gommon v0.4.2 // indirect
