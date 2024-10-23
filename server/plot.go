@@ -2,12 +2,13 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"html/template"
 	"log/slog"
 	"strconv"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 
 	"github.com/jylitalo/mystats/pkg/plot"
@@ -45,13 +46,15 @@ func newPlotFormData() PlotFormData {
 }
 
 type PlotData struct {
-	Years    []int
-	Measure  string
-	Stats    [][]string
-	Totals   []string
-	Filename string
-	Period   string
-	plot     func(
+	Years         []int
+	Measure       string
+	Stats         [][]string
+	Totals        []string
+	ScriptColumns []int
+	ScriptRows    template.JS
+	ScriptColors  template.JS
+	Period        string
+	plot          func(
 		ctx context.Context, db plot.Storage, types, workoutTypes []string, measure string,
 		month, day int, years []int, filename string,
 	) error
@@ -89,6 +92,20 @@ func (p *PlotPage) render(
 	ctx, span := telemetry.NewSpan(ctx, "plot.render")
 	defer span.End()
 
+	colors := []string{
+		"#0000ff", // 1
+		"#00ff00", // 2
+		"#ff0000", // 3
+		"#00ffff", // 4
+		"#ffff00", // 5
+		"#ff00ff", // 6
+		"#000088", // 7
+		"#008800", // 8
+		"#880000", // 9
+		"#00f000",
+		"#0000f0",
+	}
+
 	p.Form.EndMonth = month
 	p.Form.EndDay = day
 	p.Form.Years = years
@@ -96,22 +113,41 @@ func (p *PlotPage) render(
 	checkedWorkoutTypes := selectedWorkoutTypes(workoutTypes)
 	checkedYears := selectedYears(years)
 	d := &p.Data
-	d.Filename = "cache/plot-" + uuid.NewString() + ".png"
-	err := d.plot(
-		ctx, db, checkedTypes, checkedWorkoutTypes, d.Measure, month, day,
-		checkedYears, "server/"+d.Filename,
-	)
+	numbers, err := plot.GetNumbers(ctx, db, checkedTypes, checkedWorkoutTypes, d.Measure, month, day, checkedYears)
 	if err != nil {
 		slog.Error("failed to plot", "err", err)
 		return err
 	}
+	foundYears := []int{}
+	for _, year := range checkedYears {
+		if _, ok := numbers.Xs[year]; ok {
+			foundYears = append(foundYears, year)
+		}
+	}
+	scriptRows := [][]float64{}
+	modifier := float64(1)
+	if d.Measure == "time" {
+		modifier = 3600
+	}
+	for day := range numbers.Xs[foundYears[0]] {
+		scriptRows = append(scriptRows, make([]float64, len(foundYears)+1))
+		scriptRows[day][0] = float64(day)
+		for idx, year := range foundYears {
+			scriptRows[day][idx+1] = numbers.Ys[year][day] / modifier
+		}
+	}
+	byteRows, _ := json.Marshal(scriptRows)
+	byteColors, _ := json.Marshal(colors[0:len(foundYears)])
+	p.Data.ScriptColumns = foundYears
+	p.Data.ScriptRows = template.JS(byteRows)
+	p.Data.ScriptColors = template.JS(byteColors)
 	measure := d.Measure
 	if measure == "time" {
 		measure = "elapsedtime"
 	}
 	d.Years, d.Stats, d.Totals, err = d.stats(
 		ctx, db, "sum("+measure+")", period, checkedTypes, checkedWorkoutTypes,
-		month, day, checkedYears,
+		month, day, foundYears,
 	)
 	if err != nil {
 		slog.Error("failed to calculate stats", "err", err)
@@ -125,8 +161,8 @@ func plotPost(ctx context.Context, page *Page, db Storage) func(c echo.Context) 
 		defer span.End()
 		month, errM := strconv.Atoi(c.FormValue("EndMonth"))
 		day, errD := strconv.Atoi(c.FormValue("EndDay"))
-		page.Plot.Data.Measure = c.FormValue("Measure")
-		page.Plot.Form.Measure = page.Plot.Data.Measure
+		page.Plot.Form.Measure = c.FormValue("Measure")
+		page.Plot.Data.Measure = page.Plot.Form.Measure
 		page.Plot.Data.Period = c.FormValue("Period")
 		page.Plot.Form.Period = page.Plot.Data.Period
 		values, errV := c.FormParams()
