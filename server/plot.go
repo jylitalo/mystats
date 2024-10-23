@@ -110,20 +110,16 @@ func (p *PlotPage) render(
 	}
 	foundYears := []int{}
 	for _, year := range checkedYears {
-		if _, ok := numbers.Xs[year]; ok {
+		if _, ok := numbers[year]; ok {
 			foundYears = append(foundYears, year)
 		}
 	}
 	scriptRows := [][]float64{}
-	modifier := float64(1)
-	if d.Measure == "time" {
-		modifier = 3600
-	}
-	for day := range numbers.Xs[foundYears[0]] {
+	for day := range numbers[foundYears[0]] {
 		scriptRows = append(scriptRows, make([]float64, len(foundYears)+1))
 		scriptRows[day][0] = float64(day)
 		for idx, year := range foundYears {
-			scriptRows[day][idx+1] = numbers.Ys[year][day] / modifier
+			scriptRows[day][idx+1] = numbers[year][day]
 		}
 	}
 	byteRows, _ := json.Marshal(scriptRows)
