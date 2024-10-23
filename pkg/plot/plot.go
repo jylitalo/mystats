@@ -21,24 +21,23 @@ type Storage interface {
 	QueryYears(cond storage.SummaryConditions) ([]int, error)
 }
 
-type numbers struct {
-	xs     map[int][]float64
-	ys     map[int][]float64
+type Numbers struct {
+	Xs     map[int][]int
+	Ys     map[int][]float64
 	totals map[int]float64
-	xmax   float64
+	xmax   int
 }
 
-func scan(rows *sql.Rows, years []int, measure string) (*numbers, error) {
-	var xmax, modifier float64
+func scan(rows *sql.Rows, years []int, measure string) (*Numbers, error) {
+	var modifier float64
+	var xmax int
 
 	tz, _ := time.LoadLocation("Europe/Helsinki")
-	items := map[int]int{}
-	xs := map[int][]float64{}
+	xs := map[int][]int{}
 	ys := map[int][]float64{}
 	totals := map[int]float64{}
 	for _, year := range years {
-		items[year] = 0
-		xs[year] = []float64{}
+		xs[year] = []int{}
 		ys[year] = []float64{}
 		totals[year] = 0
 	}
@@ -57,35 +56,47 @@ func scan(rows *sql.Rows, years []int, measure string) (*numbers, error) {
 		totals[year] = totals[year] + value
 		day1 := time.Date(year, time.January, 1, 6, 0, 0, 0, tz)
 		now := time.Date(year, time.Month(month), day, 6, 0, 0, 0, tz)
-		days := now.Sub(day1).Hours() / 24
-		if items[year] > 0 && days-xs[year][items[year]-1] > 1 {
-			xs[year] = append(xs[year], days-1)
-			ys[year] = append(ys[year], ys[year][items[year]-1])
-			items[year]++
+		days := int(now.Sub(day1).Hours() / 24)
+		if len(ys[year]) == 0 {
+			for x := range days - 1 {
+				xs[year] = append(xs[year], x)
+				ys[year] = append(ys[year], 0)
+			}
+		} else {
+			y := ys[year][len(ys[year])-1]
+			for x := len(xs[year]); x < days-1; x++ {
+				xs[year] = append(xs[year], x)
+				ys[year] = append(ys[year], y)
+			}
 		}
 		xmax = max(xmax, days)
 		xs[year] = append(xs[year], days)
 		ys[year] = append(ys[year], totals[year])
-		items[year]++
 	}
-	for year := range xs {
+	for _, year := range years {
 		idx := len(xs[year]) - 1
-		if xs[year][idx] == xmax {
+		if idx > 0 && xs[year][idx] == xmax {
 			continue
 		}
-		xs[year] = append(xs[year], xmax)
-		ys[year] = append(ys[year], ys[year][idx])
+		y := float64(0)
+		if len(ys[year]) > 0 {
+			y = ys[year][len(ys[year])-1]
+		}
+		for x := len(xs[year]); x < xmax; x++ {
+			xs[year] = append(xs[year], x)
+			ys[year] = append(ys[year], y)
+		}
 	}
-	return &numbers{xs: xs, ys: ys, totals: totals, xmax: xmax}, nil
+	return &Numbers{Xs: xs, Ys: ys, totals: totals, xmax: xmax}, nil
 }
 
-func Plot(db Storage, types, workoutTypes []string, measure string, month, day int, years []int, filename string) error {
+func GetNumbers(db Storage, types, workoutTypes []string, measure string, month, day int, years []int) (*Numbers, error) {
 	cond := storage.SummaryConditions{
 		Types: types, WorkoutTypes: workoutTypes, Month: month, Day: day, Years: years,
 	}
 	years, err := db.QueryYears(cond)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	o := []string{"year", "month", "day"}
 	m := measure
@@ -97,10 +108,14 @@ func Plot(db Storage, types, workoutTypes []string, measure string, month, day i
 		cond, &storage.Order{GroupBy: o, OrderBy: o},
 	)
 	if err != nil {
-		return fmt.Errorf("select caused: %w", err)
+		return nil, fmt.Errorf("select caused: %w", err)
 	}
 	defer rows.Close()
-	numbers, err := scan(rows, years, measure)
+	return scan(rows, years, measure)
+}
+
+func Plot(db Storage, types, workoutTypes []string, measure string, month, day int, years []int, filename string) error {
+	numbers, err := GetNumbers(db, types, workoutTypes, measure, month, day, years)
 	if err != nil {
 		return err
 	}
@@ -125,11 +140,15 @@ func Plot(db Storage, types, workoutTypes []string, measure string, month, day i
 	p.X.Tick.Label.XAlign = text.XLeft
 	p.Y.Label.Text = measure
 	p.X.Min = 0
-	p.X.Max = numbers.xmax
+	p.X.Max = float64(numbers.xmax)
 	p.Y.Min = 0
 	yearLines := []interface{}{}
 	for _, year := range years {
-		yearLines = append(yearLines, strconv.FormatInt(int64(year), 10), hplot.ZipXY(numbers.xs[year], numbers.ys[year]))
+		floatX := make([]float64, len(numbers.Xs[year]))
+		for i := range len(numbers.Xs[year]) {
+			floatX[i] = float64(numbers.Xs[year][i])
+		}
+		yearLines = append(yearLines, strconv.FormatInt(int64(year), 10), hplot.ZipXY(floatX, numbers.Ys[year]))
 	}
 	err = plotutil.AddLines(p, yearLines...)
 	if err != nil {
