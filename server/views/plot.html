@@ -9,8 +9,8 @@
     <div id="month">
         <b>Month:</b>
         <select hx-swap="outerHTML" hx-target="#plot-data" hx-post="/plot" name="EndMonth">
-            {{ $endMonth := .EndMonth }}
-            {{ range $m := N 1 13 }}
+            {{ $endMonth := .EndMonth -}}
+            {{ range $m := N 1 13 -}}
                 <option value="{{ $m }}"{{ if eq $m $endMonth }}  SELECTED{{ end }}>{{ month $m }}</option>
             {{ end }}
         </select>
@@ -18,8 +18,8 @@
     <div id="day">
         <b>Day:</b>
         <select hx-swap="outerHTML" hx-target="#plot-data" hx-post="/plot" name="EndDay">
-            {{ $endDay := .EndDay }}
-            {{ range $d := N 1 32 }}
+            {{ $endDay := .EndDay -}}
+            {{ range $d := N 1 32 -}}
                 <option value="{{ $d }}"{{ if eq $d $endDay }}  selected{{ end }}>{{ $d }}</option>
             {{ end }}
         </select>
@@ -27,8 +27,8 @@
     <div id="plot-period">
         <b>Period in table:</b>
         <select hx-swap="outerHTML" hx-target="#plot-data" hx-post="/plot" name="Period">
-            {{ $period := .Period }}
-            {{ range $p := .PeriodOptions }}
+            {{ $period := .Period -}}
+            {{ range $p := .PeriodOptions -}}
                 <option value="{{ $p }}"{{ if eq $p $period }}  selected{{ end }}>{{ $p }}</option>
             {{ end }}
         </select>
@@ -36,8 +36,8 @@
     <div id="plot-measure">
         <b>Measure:</b>
         <select hx-swap="outerHTML" hx-target="#plot-data" hx-post="/plot" name="Measure">
-            {{ $measure := .Measure }}
-            {{ range $m := .MeasureOptions }}
+            {{ $measure := .Measure -}}
+            {{ range $m := .MeasureOptions -}}
                 <option value="{{ $m }}"{{ if eq $m $measure }}  selected{{ end }}>{{ $m }}</option>
             {{ end }}
         </select>
@@ -58,9 +58,34 @@
 
 {{ block "plot-plot" . }}
 <div id="plot" style="display: flex; flex-direction: column">
-    {{ if .Filename -}}
-    <img src="{{ .Filename }}" alt="" />
-    {{ end -}}
+    <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+    <script type="text/javascript">
+        google.charts.load('current', {'packages':['corechart', 'line']});
+        google.charts.setOnLoadCallback(drawLineColors);
+        function drawLineColors() {
+            var data = new google.visualization.DataTable();
+            var options = {
+                height: 750,
+                hAxis: { title: 'days' },
+                vAxis: { title: 
+                    {{- if eq .Measure "time" }}"time (h)"
+                    {{- else if eq .Measure "distance" }}"distance (km)"
+                    {{- else if eq .Measure "elevation" }}"elevation (m)"
+                    {{- else }}{{ .Measure }}
+                    {{- end }} },
+                colors: {{ .ScriptColors }}
+            };
+
+            data.addColumn('number', 'X');
+            {{ range $year := .ScriptColumns -}}
+            data.addColumn('number', '{{$year}}');
+            {{ end }}
+            data.addRows({{ .ScriptRows }});
+            var chart = new google.visualization.LineChart(document.getElementById('chart_div'));
+            chart.draw(data, options);
+        };
+    </script>
+    <div id="chart_div"></div>
 </div>
 {{ end }}
 
