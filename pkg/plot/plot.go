@@ -39,11 +39,12 @@ func scan(rows *sql.Rows, years []int) (Numbers, error) {
 		}
 		now := time.Date(year, time.Month(month), day, 6, 0, 0, 0, tz)
 		days := int(now.Sub(day1[year]).Hours() / 24)
+		yslen := len(ys[year])
 		y := float64(0)
-		if len(ys[year]) > 0 {
-			y = ys[year][len(ys[year])-1]
+		if yslen > 0 {
+			y = ys[year][yslen-1]
 		}
-		for x := len(ys[year]); x < days-1; x++ {
+		for x := yslen; x < days-1; x++ {
 			ys[year] = append(ys[year], y)
 		}
 		xmax = max(xmax, days)
@@ -51,9 +52,6 @@ func scan(rows *sql.Rows, years []int) (Numbers, error) {
 	}
 	for _, year := range years {
 		yslen := len(ys[year])
-		if yslen == xmax {
-			continue
-		}
 		y := float64(0)
 		if yslen > 0 {
 			y = ys[year][yslen-1]

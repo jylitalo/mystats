@@ -3,10 +3,13 @@ package server
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"html/template"
 	"log"
 	"log/slog"
+	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/labstack/echo/v4"
@@ -114,10 +117,17 @@ func (p *PlotPage) render(
 			foundYears = append(foundYears, year)
 		}
 	}
-	scriptRows := [][]float64{}
+	refTime, err := time.Parse(time.DateOnly, fmt.Sprintf("%d-01-01", slices.Max(foundYears)))
+	if err != nil {
+		return err
+	}
+	scriptRows := [][]interface{}{}
 	for day := range numbers[foundYears[0]] {
-		scriptRows = append(scriptRows, make([]float64, len(foundYears)+1))
-		scriptRows[day][0] = float64(day)
+		scriptRows = append(scriptRows, make([]interface{}, len(foundYears)+1))
+		delta, _ := time.ParseDuration(fmt.Sprintf("%dh", 24*day))
+		index0 := refTime.Add(delta)
+		// Month in JavaScript's Date is 0-indexed
+		scriptRows[day][0] = template.JS(fmt.Sprintf("new Date(%d, %d, %d)", index0.Year(), index0.Month()-1, index0.Day()))
 		for idx, year := range foundYears {
 			scriptRows[day][idx+1] = numbers[year][day]
 		}
@@ -125,7 +135,7 @@ func (p *PlotPage) render(
 	byteRows, _ := json.Marshal(scriptRows)
 	byteColors, _ := json.Marshal(colors[0:len(foundYears)])
 	p.Data.ScriptColumns = foundYears
-	p.Data.ScriptRows = template.JS(byteRows)
+	p.Data.ScriptRows = template.JS(strings.ReplaceAll(string(byteRows), `"`, ``))
 	p.Data.ScriptColors = template.JS(byteColors)
 	measure := d.Measure
 	if measure == "time" {
