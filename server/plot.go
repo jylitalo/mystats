@@ -1,6 +1,7 @@
 package server
 
 import (
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,8 +15,8 @@ import (
 
 	"github.com/labstack/echo/v4"
 
-	"github.com/jylitalo/mystats/pkg/plot"
 	"github.com/jylitalo/mystats/pkg/stats"
+	"github.com/jylitalo/mystats/storage"
 )
 
 type PlotFormData struct {
@@ -56,7 +57,6 @@ type PlotData struct {
 	ScriptRows    template.JS
 	ScriptColors  template.JS
 	Period        string
-	plot          func(db plot.Storage, types, workoutTypes []string, measure string, month, day int, years []int, filename string) error
 	stats         func(db stats.Storage, measure, period string, types, workoutTypes []string, month, day int, years []int) ([]int, [][]string, []string, error)
 }
 
@@ -64,7 +64,6 @@ func newPlotData() PlotData {
 	return PlotData{
 		Measure: "distance",
 		Period:  "month",
-		plot:    plot.Plot,
 		stats:   stats.Stats,
 	}
 }
@@ -106,7 +105,7 @@ func (p *PlotPage) render(
 	checkedWorkoutTypes := selectedWorkoutTypes(workoutTypes)
 	checkedYears := selectedYears(years)
 	d := &p.Data
-	numbers, err := plot.GetNumbers(db, checkedTypes, checkedWorkoutTypes, d.Measure, month, day, checkedYears)
+	numbers, err := getNumbers(db, checkedTypes, checkedWorkoutTypes, d.Measure, month, day, checkedYears)
 	if err != nil {
 		slog.Error("failed to plot", "err", err)
 		return err
@@ -151,6 +150,8 @@ func (p *PlotPage) render(
 	return err
 }
 
+type numbers map[int][]float64
+
 func plotPost(page *Page, db Storage) func(c echo.Context) error {
 	return func(c echo.Context) error {
 		month, errM := strconv.Atoi(c.FormValue("EndMonth"))
@@ -172,4 +173,69 @@ func plotPost(page *Page, db Storage) func(c echo.Context) error {
 			c.Render(200, "plot-data", page.Plot.Data),
 		)
 	}
+}
+
+func scan(rows *sql.Rows, years []int) (numbers, error) {
+	tz, _ := time.LoadLocation("Europe/Helsinki")
+	day1 := map[int]time.Time{}
+	ys := map[int][]float64{}
+	for _, year := range years {
+		day1[year] = time.Date(year, time.January, 1, 6, 0, 0, 0, tz)
+		ys[year] = []float64{}
+	}
+	xmax := 0
+	for rows.Next() {
+		var year, month, day int
+		var value float64
+		if err := rows.Scan(&year, &month, &day, &value); err != nil {
+			return ys, err
+		}
+		now := time.Date(year, time.Month(month), day, 6, 0, 0, 0, tz)
+		days := int(now.Sub(day1[year]).Hours() / 24)
+		yslen := len(ys[year])
+		y := float64(0)
+		if yslen > 0 {
+			y = ys[year][yslen-1]
+		}
+		for x := yslen; x < days-1; x++ {
+			ys[year] = append(ys[year], y)
+		}
+		xmax = max(xmax, days)
+		ys[year] = append(ys[year], y+value)
+	}
+	for _, year := range years {
+		yslen := len(ys[year])
+		y := float64(0)
+		if yslen > 0 {
+			y = ys[year][yslen-1]
+		}
+		for x := yslen; x < xmax; x++ {
+			ys[year] = append(ys[year], y)
+		}
+	}
+	return ys, nil
+}
+
+func getNumbers(db Storage, types, workoutTypes []string, measure string, month, day int, years []int) (numbers, error) {
+	cond := storage.SummaryConditions{
+		Types: types, WorkoutTypes: workoutTypes, Month: month, Day: day, Years: years,
+	}
+	years, err := db.QueryYears(cond)
+	if err != nil {
+		return nil, err
+	}
+	m := "sum(" + measure + ")"
+	switch measure {
+	case "time":
+		m = "sum(elapsedtime)/3600"
+	case "distance":
+		m = "sum(distance)/1000"
+	}
+	o := []string{"year", "month", "day"}
+	rows, err := db.QuerySummary(append(o, m), cond, &storage.Order{GroupBy: o, OrderBy: o})
+	if err != nil {
+		return nil, fmt.Errorf("select caused: %w", err)
+	}
+	defer rows.Close()
+	return scan(rows, years)
 }

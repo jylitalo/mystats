@@ -16,7 +16,7 @@ func Execute() error {
 	}
 	rootCmd.AddCommand(
 		configureCmd(), fetchCmd(), makeCmd(),
-		bestCmd(), listCmd(types), plotCmd(types), statsCmd(types), topCmd(types),
+		bestCmd(), listCmd(types), statsCmd(types), topCmd(types),
 		serverCmd(types),
 	)
 	return rootCmd.Execute()
