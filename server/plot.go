@@ -2,17 +2,22 @@ package server
 
 import (
 	"context"
+	"database/sql"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"html/template"
 	"log/slog"
+	"slices"
 	"strconv"
+	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 
-	"github.com/jylitalo/mystats/pkg/plot"
 	"github.com/jylitalo/mystats/pkg/stats"
 	"github.com/jylitalo/mystats/pkg/telemetry"
+	"github.com/jylitalo/mystats/storage"
 )
 
 type PlotFormData struct {
@@ -45,17 +50,15 @@ func newPlotFormData() PlotFormData {
 }
 
 type PlotData struct {
-	Years    []int
-	Measure  string
-	Stats    [][]string
-	Totals   []string
-	Filename string
-	Period   string
-	plot     func(
-		ctx context.Context, db plot.Storage, types, workoutTypes []string, measure string,
-		month, day int, years []int, filename string,
-	) error
-	stats func(
+	Years         []int
+	Measure       string
+	Stats         [][]string
+	Totals        []string
+	ScriptColumns []int
+	ScriptRows    template.JS
+	ScriptColors  template.JS
+	Period        string
+	stats         func(
 		ctx context.Context, db stats.Storage, measure, period string, types, workoutTypes []string,
 		month, day int, years []int,
 	) ([]int, [][]string, []string, error)
@@ -65,7 +68,6 @@ func newPlotData() PlotData {
 	return PlotData{
 		Measure: "distance",
 		Period:  "month",
-		plot:    plot.Plot,
 		stats:   stats.Stats,
 	}
 }
@@ -89,6 +91,20 @@ func (p *PlotPage) render(
 	ctx, span := telemetry.NewSpan(ctx, "plot.render")
 	defer span.End()
 
+	colors := []string{
+		"#0000ff", // 1
+		"#00ff00", // 2
+		"#ff0000", // 3
+		"#00ffff", // 4
+		"#ffff00", // 5
+		"#ff00ff", // 6
+		"#000088", // 7
+		"#008800", // 8
+		"#880000", // 9
+		"#00f000",
+		"#0000f0",
+	}
+
 	p.Form.EndMonth = month
 	p.Form.EndDay = day
 	p.Form.Years = years
@@ -96,22 +112,44 @@ func (p *PlotPage) render(
 	checkedWorkoutTypes := selectedWorkoutTypes(workoutTypes)
 	checkedYears := selectedYears(years)
 	d := &p.Data
-	d.Filename = "cache/plot-" + uuid.NewString() + ".png"
-	err := d.plot(
-		ctx, db, checkedTypes, checkedWorkoutTypes, d.Measure, month, day,
-		checkedYears, "server/"+d.Filename,
-	)
+	numbers, err := getNumbers(ctx, db, checkedTypes, checkedWorkoutTypes, d.Measure, month, day, checkedYears)
 	if err != nil {
 		slog.Error("failed to plot", "err", err)
 		return err
 	}
+	foundYears := []int{}
+	for _, year := range checkedYears {
+		if _, ok := numbers[year]; ok {
+			foundYears = append(foundYears, year)
+		}
+	}
+	refTime, err := time.Parse(time.DateOnly, fmt.Sprintf("%d-01-01", slices.Max(foundYears)))
+	if err != nil {
+		return err
+	}
+	scriptRows := [][]interface{}{}
+	for day := range numbers[foundYears[0]] {
+		scriptRows = append(scriptRows, make([]interface{}, len(foundYears)+1))
+		delta, _ := time.ParseDuration(fmt.Sprintf("%dh", 24*day))
+		index0 := refTime.Add(delta)
+		// Month in JavaScript's Date is 0-indexed
+		scriptRows[day][0] = template.JS(fmt.Sprintf("new Date(%d, %d, %d)", index0.Year(), index0.Month()-1, index0.Day()))
+		for idx, year := range foundYears {
+			scriptRows[day][idx+1] = numbers[year][day]
+		}
+	}
+	byteRows, _ := json.Marshal(scriptRows)
+	byteColors, _ := json.Marshal(colors[0:len(foundYears)])
+	p.Data.ScriptColumns = foundYears
+	p.Data.ScriptRows = template.JS(strings.ReplaceAll(string(byteRows), `"`, ``))
+	p.Data.ScriptColors = template.JS(byteColors)
 	measure := d.Measure
 	if measure == "time" {
 		measure = "elapsedtime"
 	}
 	d.Years, d.Stats, d.Totals, err = d.stats(
 		ctx, db, "sum("+measure+")", period, checkedTypes, checkedWorkoutTypes,
-		month, day, checkedYears,
+		month, day, foundYears,
 	)
 	if err != nil {
 		slog.Error("failed to calculate stats", "err", err)
@@ -119,14 +157,16 @@ func (p *PlotPage) render(
 	return err
 }
 
+type numbers map[int][]float64
+
 func plotPost(ctx context.Context, page *Page, db Storage) func(c echo.Context) error {
 	return func(c echo.Context) error {
 		_, span := telemetry.NewSpan(ctx, "plotPOST")
 		defer span.End()
 		month, errM := strconv.Atoi(c.FormValue("EndMonth"))
 		day, errD := strconv.Atoi(c.FormValue("EndDay"))
-		page.Plot.Data.Measure = c.FormValue("Measure")
-		page.Plot.Form.Measure = page.Plot.Data.Measure
+		page.Plot.Form.Measure = c.FormValue("Measure")
+		page.Plot.Data.Measure = page.Plot.Form.Measure
 		page.Plot.Data.Period = c.FormValue("Period")
 		page.Plot.Form.Period = page.Plot.Data.Period
 		values, errV := c.FormParams()
@@ -142,4 +182,75 @@ func plotPost(ctx context.Context, page *Page, db Storage) func(c echo.Context) 
 			c.Render(200, "plot-data", page.Plot.Data),
 		))
 	}
+}
+
+func scan(rows *sql.Rows, years []int) (numbers, error) {
+	tz, _ := time.LoadLocation("Europe/Helsinki")
+	day1 := map[int]time.Time{}
+	ys := map[int][]float64{}
+	for _, year := range years {
+		day1[year] = time.Date(year, time.January, 1, 6, 0, 0, 0, tz)
+		ys[year] = []float64{}
+	}
+	xmax := 0
+	for rows.Next() {
+		var year, month, day int
+		var value float64
+		if err := rows.Scan(&year, &month, &day, &value); err != nil {
+			return ys, err
+		}
+		now := time.Date(year, time.Month(month), day, 6, 0, 0, 0, tz)
+		days := int(now.Sub(day1[year]).Hours() / 24)
+		yslen := len(ys[year])
+		y := float64(0)
+		if yslen > 0 {
+			y = ys[year][yslen-1]
+		}
+		for x := yslen; x < days-1; x++ {
+			ys[year] = append(ys[year], y)
+		}
+		xmax = max(xmax, days)
+		ys[year] = append(ys[year], y+value)
+	}
+	for _, year := range years {
+		yslen := len(ys[year])
+		y := float64(0)
+		if yslen > 0 {
+			y = ys[year][yslen-1]
+		}
+		for x := yslen; x < xmax; x++ {
+			ys[year] = append(ys[year], y)
+		}
+	}
+	return ys, nil
+}
+
+func getNumbers(
+	ctx context.Context, db Storage, types, workoutTypes []string, measure string,
+	month, day int, years []int,
+) (numbers, error) {
+	cond := storage.SummaryConditions{
+		Types: types, WorkoutTypes: workoutTypes, Month: month, Day: day, Years: years,
+	}
+	_, span := telemetry.NewSpan(ctx, "server.getNumbers")
+	defer span.End()
+
+	years, err := db.QueryYears(cond)
+	if err != nil {
+		return nil, err
+	}
+	m := "sum(" + measure + ")"
+	switch measure {
+	case "time":
+		m = "sum(elapsedtime)/3600"
+	case "distance":
+		m = "sum(distance)/1000"
+	}
+	o := []string{"year", "month", "day"}
+	rows, err := db.QuerySummary(append(o, m), cond, &storage.Order{GroupBy: o, OrderBy: o})
+	if err != nil {
+		return nil, fmt.Errorf("select caused: %w", err)
+	}
+	defer rows.Close()
+	return scan(rows, years)
 }

@@ -7,7 +7,6 @@ import (
 	"database/sql"
 	"testing"
 
-	"github.com/jylitalo/mystats/pkg/plot"
 	"github.com/jylitalo/mystats/pkg/stats"
 	"github.com/jylitalo/mystats/storage"
 )
@@ -44,16 +43,10 @@ func (t *testDB) QueryYears(cond storage.SummaryConditions) ([]int, error) {
 
 func TestTemplateRender(t *testing.T) {
 	p := newPage()
-	p.Plot.Data.plot = func(
-		ctx context.Context, db plot.Storage, types, workoutTypes []string, measurement string,
-		month, day int, years []int, filename string,
-	) error {
-		return nil
-	}
 	p.Plot.Data.stats = func(
 		ctx context.Context, db stats.Storage, measurement, period string, types, workoutTypes []string,
-		month, day int, years []int,
-	) ([]int, [][]string, []string, error) {
+		month, day int, years []int) ([]int, [][]string, []string, error,
+	) {
 		return nil, nil, nil, nil
 	}
 	err := p.Plot.render(context.TODO(), &testDB{}, map[string]bool{"Run": true}, nil, 6, 12, map[int]bool{2024: true}, "month")

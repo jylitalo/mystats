@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/url"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -127,6 +128,7 @@ func selectedYears(years map[int]bool) []int {
 			checked = append(checked, k)
 		}
 	}
+	slices.Sort(checked)
 	return checked
 }
 
