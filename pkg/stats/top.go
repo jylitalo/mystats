@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/jylitalo/mystats/pkg/telemetry"
@@ -15,26 +14,33 @@ func Top(ctx context.Context, db Storage, measure, period string, types, workout
 	_, span := telemetry.NewSpan(ctx, "stats.Top")
 	defer span.End()
 
-	modifier := float64(1)
-	unit := "%4.0fm"
-	switch {
-	case strings.Contains(measure, "distance") && !strings.Contains(measure, "count"):
-		modifier = 1000
-		unit = "%4.1fkm"
-	case strings.Contains(measure, "time") && !strings.Contains(measure, "count"):
-		modifier = 3600
+	var m, unit, p string
+	switch measure {
+	case "time":
+		m = "sum(elapsedtime)/3600"
 		unit = "%4.1fh"
+	case "distance":
+		m = "sum(distance)/1000"
+		unit = "%4.1fkm"
+	case "elevation":
+		m = "sum(elevation)"
+		unit = "%4.0fm"
 	}
-	if measure == "time" {
-		measure = "elapsedtime"
+	switch period {
+	case "month":
+		p = "month"
+	case "week":
+		p = "week"
+	case "day":
+		p = "day"
 	}
 	results := [][]string{}
 	rows, err := db.QuerySummary(
-		[]string{"sum(" + measure + ") as total", "year", period},
+		[]string{m + " as total", "year", p},
 		storage.SummaryConditions{Types: types, WorkoutTypes: workoutTypes, Years: years},
 		&storage.Order{
-			GroupBy: []string{"year", period},
-			OrderBy: []string{"total desc", "year desc", period + " desc"},
+			GroupBy: []string{"year", p},
+			OrderBy: []string{"total desc", "year desc", p + " desc"},
 			Limit:   limit},
 	)
 	if err != nil {
@@ -47,14 +53,14 @@ func Top(ctx context.Context, db Storage, measure, period string, types, workout
 		if err = rows.Scan(&measureValue, &year, &periodValue); err != nil {
 			return nil, nil, telemetry.Error(span, err)
 		}
-		value := fmt.Sprintf(unit, measureValue/modifier)
+		value := fmt.Sprintf(unit, measureValue)
 		periodStr := strconv.FormatInt(int64(periodValue), 10)
-		if period == "month" {
+		if p == "month" {
 			periodStr = time.Month(periodValue).String()
 		}
 		results = append(
 			results, []string{value, strconv.FormatInt(int64(year), 10), periodStr},
 		)
 	}
-	return []string{measure, "year", period}, results, nil
+	return []string{measure, "year", p}, results, nil
 }

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/jylitalo/mystats/pkg/stats"
+	"github.com/jylitalo/mystats/pkg/telemetry"
 	"github.com/jylitalo/mystats/storage"
 )
 
@@ -49,7 +50,8 @@ func TestTemplateRender(t *testing.T) {
 	) {
 		return nil, nil, nil, nil
 	}
-	err := p.Plot.render(context.TODO(), &testDB{}, map[string]bool{"Run": true}, nil, 6, 12, map[int]bool{2024: true}, "month")
+	ctx, _, _ := telemetry.Setup(context.TODO(), "test")
+	err := p.Plot.render(ctx, &testDB{}, map[string]bool{"Run": true}, nil, 6, 12, map[int]bool{2024: true}, "month")
 	if err != nil {
 		t.Error(err)
 	}
