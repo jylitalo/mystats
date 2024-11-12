@@ -14,7 +14,7 @@ func Top(ctx context.Context, db Storage, measure, period string, types, workout
 	_, span := telemetry.NewSpan(ctx, "stats.Top")
 	defer span.End()
 
-	var m, unit string
+	var m, unit, p string
 	switch measure {
 	case "time":
 		m = "sum(elapsedtime)/3600"
@@ -26,13 +26,21 @@ func Top(ctx context.Context, db Storage, measure, period string, types, workout
 		m = "sum(elevation)"
 		unit = "%4.0fm"
 	}
+	switch period {
+	case "month":
+		p = "month"
+	case "week":
+		p = "week"
+	case "day":
+		p = "day"
+	}
 	results := [][]string{}
 	rows, err := db.QuerySummary(
-		[]string{m + " as total", "year", period},
+		[]string{m + " as total", "year", p},
 		storage.SummaryConditions{Types: types, WorkoutTypes: workoutTypes, Years: years},
 		&storage.Order{
-			GroupBy: []string{"year", period},
-			OrderBy: []string{"total desc", "year desc", period + " desc"},
+			GroupBy: []string{"year", p},
+			OrderBy: []string{"total desc", "year desc", p + " desc"},
 			Limit:   limit},
 	)
 	if err != nil {
@@ -47,12 +55,12 @@ func Top(ctx context.Context, db Storage, measure, period string, types, workout
 		}
 		value := fmt.Sprintf(unit, measureValue)
 		periodStr := strconv.FormatInt(int64(periodValue), 10)
-		if period == "month" {
+		if p == "month" {
 			periodStr = time.Month(periodValue).String()
 		}
 		results = append(
 			results, []string{value, strconv.FormatInt(int64(year), 10), periodStr},
 		)
 	}
-	return []string{measure, "year", period}, results, nil
+	return []string{measure, "year", p}, results, nil
 }
