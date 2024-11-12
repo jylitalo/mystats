@@ -246,12 +246,14 @@ func getNumbers(
 	if err != nil {
 		return nil, err
 	}
-	m := "sum(" + measure + ")"
+	var m string
 	switch measure {
 	case "time":
 		m = "sum(elapsedtime)/3600"
 	case "distance":
 		m = "sum(distance)/1000"
+	case "elevation":
+		m = "sum(elevation)"
 	}
 	o := []string{"year", "month", "day"}
 	rows, err := db.QuerySummary(append(o, m), cond, &storage.Order{GroupBy: o, OrderBy: o})
