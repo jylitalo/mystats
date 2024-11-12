@@ -2,6 +2,7 @@ package telemetry
 
 import (
 	"context"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -86,6 +87,10 @@ func Setup(ctx context.Context, name string) (context.Context, *sdktrace.TracerP
 }
 
 func NewSpan(ctx context.Context, name string) (context.Context, trace.Span) {
+	value := ctx.Value(otelCtxKey)
+	if value == nil {
+		log.Fatal("Telemetry has not been setup")
+	}
 	return ctx.Value(otelCtxKey).(trace.Tracer).Start(ctx, name)
 }
 

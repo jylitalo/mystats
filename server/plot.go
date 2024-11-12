@@ -123,6 +123,10 @@ func (p *PlotPage) render(
 			foundYears = append(foundYears, year)
 		}
 	}
+	if len(foundYears) == 0 {
+		slog.Error("No years found in plot.render()")
+		return nil
+	}
 	refTime, err := time.Parse(time.DateOnly, fmt.Sprintf("%d-01-01", slices.Max(foundYears)))
 	if err != nil {
 		return err
@@ -193,6 +197,9 @@ func scan(rows *sql.Rows, years []int) (numbers, error) {
 		ys[year] = []float64{}
 	}
 	xmax := 0
+	if rows == nil {
+		return ys, nil
+	}
 	for rows.Next() {
 		var year, month, day int
 		var value float64
@@ -251,6 +258,10 @@ func getNumbers(
 	if err != nil {
 		return nil, fmt.Errorf("select caused: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		if rows != nil {
+			rows.Close()
+		}
+	}()
 	return scan(rows, years)
 }
