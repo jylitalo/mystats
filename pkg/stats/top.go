@@ -45,7 +45,7 @@ func Top(ctx context.Context, db Storage, measure, period string, types, workout
 		if err = rows.Scan(&measureValue, &year, &periodValue); err != nil {
 			return nil, nil, telemetry.Error(span, err)
 		}
-		value := fmt.Sprintf(unit, measureValue/modifier)
+		value := fmt.Sprintf(unit, measureValue)
 		periodStr := strconv.FormatInt(int64(periodValue), 10)
 		if period == "month" {
 			periodStr = time.Month(periodValue).String()
