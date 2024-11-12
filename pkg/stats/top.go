@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/jylitalo/mystats/pkg/telemetry"
@@ -15,22 +14,21 @@ func Top(ctx context.Context, db Storage, measure, period string, types, workout
 	_, span := telemetry.NewSpan(ctx, "stats.Top")
 	defer span.End()
 
-	modifier := float64(1)
-	unit := "%4.0fm"
-	switch {
-	case strings.Contains(measure, "distance") && !strings.Contains(measure, "count"):
-		modifier = 1000
-		unit = "%4.1fkm"
-	case strings.Contains(measure, "time") && !strings.Contains(measure, "count"):
-		modifier = 3600
+	var m, unit string
+	switch measure {
+	case "time":
+		m = "sum(elapsedtime)/3600"
 		unit = "%4.1fh"
-	}
-	if measure == "time" {
-		measure = "elapsedtime"
+	case "distance":
+		m = "sum(distance)/1000"
+		unit = "%4.1fkm"
+	case "elevation":
+		m = "sum(elevation)"
+		unit = "%4.0fm"
 	}
 	results := [][]string{}
 	rows, err := db.QuerySummary(
-		[]string{"sum(" + measure + ") as total", "year", period},
+		[]string{m + " as total", "year", period},
 		storage.SummaryConditions{Types: types, WorkoutTypes: workoutTypes, Years: years},
 		&storage.Order{
 			GroupBy: []string{"year", period},
