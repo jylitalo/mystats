@@ -58,7 +58,7 @@ func configureCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			fmt.Printf("Wrote configuration file into " + fname)
+			fmt.Println("Wrote configuration file into " + fname)
 			return nil
 		},
 	}
