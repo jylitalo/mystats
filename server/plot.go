@@ -134,10 +134,10 @@ func (p *PlotPage) render(
 	scriptRows := [][]interface{}{}
 	for day := range numbers[foundYears[0]] {
 		scriptRows = append(scriptRows, make([]interface{}, len(foundYears)+1))
-		delta, _ := time.ParseDuration(fmt.Sprintf("%dh", 24*day))
-		index0 := refTime.Add(delta)
+		index0 := refTime.Add(24 * time.Hour)
 		// Month in JavaScript's Date is 0-indexed
-		scriptRows[day][0] = template.JS(fmt.Sprintf("new Date(%d, %d, %d)", index0.Year(), index0.Month()-1, index0.Day()))
+		newDate := fmt.Sprintf("new Date(%d, %d, %d)", index0.Year(), index0.Month()-1, index0.Day())
+		scriptRows[day][0] = template.JS(newDate) // #nosec G203
 		for idx, year := range foundYears {
 			scriptRows[day][idx+1] = numbers[year][day]
 		}
@@ -145,8 +145,8 @@ func (p *PlotPage) render(
 	byteRows, _ := json.Marshal(scriptRows)
 	byteColors, _ := json.Marshal(colors[0:len(foundYears)])
 	p.Data.ScriptColumns = foundYears
-	p.Data.ScriptRows = template.JS(strings.ReplaceAll(string(byteRows), `"`, ``))
-	p.Data.ScriptColors = template.JS(byteColors)
+	p.Data.ScriptRows = template.JS(strings.ReplaceAll(string(byteRows), `"`, ``)) // #nosec G203
+	p.Data.ScriptColors = template.JS(byteColors)                                  // #nosec G203
 	measure := d.Measure
 	if measure == "time" {
 		measure = "elapsedtime"
@@ -262,7 +262,9 @@ func getNumbers(
 	}
 	defer func() {
 		if rows != nil {
-			rows.Close()
+			if err := rows.Close(); err != nil {
+				_ = telemetry.Error(span, err)
+			}
 		}
 	}()
 	return scan(rows, years)
