@@ -68,7 +68,7 @@ func listPost(ctx context.Context, page *Page, db Storage) func(c echo.Context) 
 		limit, errL := strconv.Atoi(c.FormValue("limit"))
 		name := c.FormValue("name")
 		if err = errors.Join(errV, errT, errW, errY, errL); err != nil {
-			telemetry.Error(span, err)
+			_ = telemetry.Error(span, err)
 		}
 		slog.Info("POST /list", "values", values)
 		page.List.Form.Years = years

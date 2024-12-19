@@ -26,7 +26,7 @@ func newConsoleExporter(fname string) (sdktrace.SpanExporter, error) {
 	// Your preferred exporter: console, jaeger, zipkin, OTLP, etc.
 	opts := []stdouttrace.Option{}
 	if fname != "" {
-		f, err := os.Create(fname)
+		f, err := os.Create(filepath.Clean(fname))
 		if err != nil {
 			return nil, err
 		}

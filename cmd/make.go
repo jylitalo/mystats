@@ -80,7 +80,9 @@ func makeDB(ctx context.Context, update bool) (Storage, error) {
 	db := &storage.Sqlite3{}
 	if skipDB(db, append(pageFnames, actFnames...)) {
 		slog.Info("Database is uptodate")
-		db.Open()
+		if err := db.Open(); err != nil {
+			return nil, telemetry.Error(span, err)
+		}
 		return db, nil
 	}
 	slog.Info("Making database")
