@@ -1,6 +1,8 @@
 package config
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -12,11 +14,15 @@ import (
 )
 
 type Config struct {
-	Strava  api.Config `yaml:"strava"`
+	Strava  *api.Config `yaml:"strava"`
 	Default struct {
 		Types []string `yaml:"types"`
 	} `yaml:"default"`
 }
+
+type configCtxKey string
+
+const configKey configCtxKey = "mystats.config"
 
 func configFile() (string, error) {
 	home, err := os.UserHomeDir()
@@ -26,7 +32,14 @@ func configFile() (string, error) {
 	return home + "/.mystats.yaml", nil
 }
 
-func Get(refresh bool) (*Config, error) {
+func Get(ctx context.Context) (*Config, error) {
+	cfg := ctx.Value(configKey)
+	if cfg == nil {
+		return nil, errors.New("config not found from context")
+	}
+	return cfg.(*Config), nil
+}
+func Read(ctx context.Context, refresh bool) (context.Context, error) {
 	setLogger()
 	fname, err := configFile()
 	if err != nil {
@@ -36,19 +49,26 @@ func Get(refresh bool) (*Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error in reading .mystats.yaml")
 	}
-	cfg := Config{}
+	cfg := Config{Strava: &api.Config{}}
 	if err = yaml.Unmarshal(body, &cfg); err != nil {
 		return nil, fmt.Errorf("error in parsing .mystats.yaml")
 	}
+	if cfg.Strava.Activities == "" {
+		cfg.Strava.Activities = "activities"
+	}
+	if cfg.Strava.Summaries == "" {
+		cfg.Strava.Summaries = "pages"
+	}
+	ctx = context.WithValue(ctx, configKey, &cfg)
 	if !refresh {
-		return &cfg, nil
+		return ctx, nil
 	}
 	tokens, changes, err := cfg.Strava.Refresh()
 	if err == nil && changes {
-		cfg.Strava = *tokens
+		cfg.Strava = tokens
 		_, err = cfg.Write()
 	}
-	return &cfg, err
+	return ctx, err
 }
 
 func setLogger() {

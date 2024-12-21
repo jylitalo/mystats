@@ -53,7 +53,7 @@ func configureCmd() *cobra.Command {
 			if tokens, err = tokens.AuthorizationCode(code[0]); err != nil {
 				return err
 			}
-			cfg := config.Config{Strava: *tokens}
+			cfg := config.Config{Strava: tokens}
 			fname, err := cfg.Write()
 			if err != nil {
 				return err

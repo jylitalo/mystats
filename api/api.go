@@ -21,6 +21,8 @@ type Config struct {
 	AccessToken  string `yaml:"accessToken" json:"access_token"`
 	RefreshToken string `yaml:"refreshToken" json:"refresh_token"`
 	ExpiresAt    int64  `yaml:"expiresAt" json:"expires_at"`
+	Summaries    string `yaml:"summaries" json:"summaries"`
+	Activities   string `yaml:"activities" json:"activities"`
 }
 
 const tokenURL string = "https://www.strava.com/oauth/token" // #nosec G101

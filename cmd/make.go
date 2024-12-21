@@ -72,8 +72,8 @@ func makeDB(ctx context.Context, update bool) (Storage, error) {
 			return nil, telemetry.Error(span, err)
 		}
 	}
-	pageFnames, errP := pageFiles()
-	actFnames, errF := activitiesFiles()
+	pageFnames, errP := pageFiles(ctx)
+	actFnames, errF := activitiesFiles(ctx)
 	if err := errors.Join(errP, errF); err != nil {
 		return nil, telemetry.Error(span, err)
 	}

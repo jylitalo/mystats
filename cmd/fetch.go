@@ -45,8 +45,8 @@ func fetch(ctx context.Context, best_efforts bool) error {
 	ctx, span := telemetry.NewSpan(ctx, "fetch")
 	defer span.End()
 
-	status, errS := getJsonStatus()
-	client, errC := getClient()
+	status, errS := getJsonStatus(ctx)
+	ctx, client, errC := getClient(ctx)
 	if err := errors.Join(errS, errC); err != nil {
 		return telemetry.Error(span, err)
 	}
@@ -66,16 +66,17 @@ func fetch(ctx context.Context, best_efforts bool) error {
 	return telemetry.Error(span, err)
 }
 
-func getClient() (*api.Client, error) {
-	cfg, err := config.Get(true)
-	if err != nil {
-		return nil, err
+func getClient(ctx context.Context) (context.Context, *api.Client, error) {
+	ctx, errR := config.Read(ctx, true)
+	cfg, errG := config.Get(ctx)
+	if err := errors.Join(errR, errG); err != nil {
+		return ctx, nil, err
 	}
 	strava := cfg.Strava
 	api.ClientId = strava.ClientID
 	api.ClientSecret = strava.ClientSecret
 	client := api.NewClient(strava.AccessToken)
-	return client, err
+	return ctx, client, nil
 }
 
 func fetchBestEfforts(ctx context.Context, client *api.Client, ids []int64, apiCalls int) error {
@@ -86,7 +87,7 @@ func fetchBestEfforts(ctx context.Context, client *api.Client, ids []int64, apiC
 	}
 	_ = os.Mkdir("activities", 0750)
 	alreadyFetched := []int64{}
-	if actFiles, err := activitiesFiles(); err != nil {
+	if actFiles, err := activitiesFiles(ctx); err != nil {
 		return telemetry.Error(span, err)
 	} else {
 		for _, actFile := range actFiles {
@@ -119,21 +120,29 @@ func fetchBestEfforts(ctx context.Context, client *api.Client, ids []int64, apiC
 	return nil
 }
 
-func activitiesFiles() ([]string, error) {
-	return filepath.Glob("activities/activity_*.json")
+func activitiesFiles(ctx context.Context) ([]string, error) {
+	cfg, err := config.Get(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return filepath.Glob(cfg.Strava.Activities + "/activity_*.json")
 }
 
-func pageFiles() ([]string, error) {
-	return filepath.Glob("pages/page*.json")
+func pageFiles(ctx context.Context) ([]string, error) {
+	cfg, err := config.Get(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return filepath.Glob(cfg.Strava.Summaries + "/page*.json")
 }
 
-func getJsonStatus() (jsonStatus, error) {
+func getJsonStatus(ctx context.Context) (jsonStatus, error) {
 	status := jsonStatus{
 		latest: time.Date(1970, time.January, 1, 0, 0, 0, 0, time.UTC),
 		pages:  0,
 		ids:    []int64{},
 	}
-	fnames, err := pageFiles()
+	fnames, err := pageFiles(ctx)
 	switch {
 	case err != nil:
 		return status, err
