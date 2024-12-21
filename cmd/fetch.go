@@ -85,16 +85,27 @@ func fetchBestEfforts(ctx context.Context, client *api.Client, ids []int64, apiC
 	if len(ids) == 0 {
 		return telemetry.Error(span, errors.New("no stravaIDs found from database"))
 	}
-	_ = os.Mkdir("activities", 0750)
-	alreadyFetched := []int64{}
-	if actFiles, err := activitiesFiles(ctx); err != nil {
-		return telemetry.Error(span, err)
-	} else {
-		for _, actFile := range actFiles {
-			intStr := strings.Split(strings.Split(actFile, "_")[1], ".")[0]
-			i, _ := strconv.Atoi(intStr)
-			alreadyFetched = append(alreadyFetched, int64(i))
+	cfg, err := config.Get(ctx)
+	if err != nil {
+		return err
+	}
+	path := cfg.Strava.Activities
+	actFiles, err := activitiesFiles(path)
+	switch {
+	case err != nil:
+		return err
+	case len(actFiles) == 0:
+		if _, err = os.Stat(path); os.IsNotExist(err) {
+			if err = os.Mkdir(path, 0750); err != nil {
+				return telemetry.Error(span, err)
+			}
 		}
+	}
+	alreadyFetched := []int64{}
+	for _, actFile := range actFiles {
+		intStr := strings.Split(strings.Split(actFile, "_")[1], ".")[0]
+		i, _ := strconv.Atoi(intStr)
+		alreadyFetched = append(alreadyFetched, int64(i))
 	}
 	service := api.NewActivitiesService(ctx, client)
 	for idx, id := range ids {
@@ -106,8 +117,8 @@ func fetchBestEfforts(ctx context.Context, client *api.Client, ids []int64, apiC
 		} else if data, err := json.Marshal(activity); err != nil {
 			return telemetry.Error(span, err)
 		} else {
-			fmt.Printf("%s => activities/activity_%d.json ...\n", activity.StartDateLocal, id)
-			if err = os.WriteFile(fmt.Sprintf("activities/activity_%d.json", id), data, 0600); err != nil {
+			fmt.Printf("%s => %s/activity_%d.json ...\n", activity.StartDateLocal, path, id)
+			if err = os.WriteFile(fmt.Sprintf("%s/activity_%d.json", path, id), data, 0600); err != nil {
 				return telemetry.Error(span, err)
 			}
 		}
@@ -120,36 +131,37 @@ func fetchBestEfforts(ctx context.Context, client *api.Client, ids []int64, apiC
 	return nil
 }
 
-func activitiesFiles(ctx context.Context) ([]string, error) {
-	cfg, err := config.Get(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return filepath.Glob(cfg.Strava.Activities + "/activity_*.json")
+func activitiesFiles(path string) ([]string, error) {
+	fmt.Printf("fetching activities files from %s/activity_*.json\n", path)
+	return filepath.Glob(path + "/activity_*.json")
 }
 
-func pageFiles(ctx context.Context) ([]string, error) {
-	cfg, err := config.Get(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return filepath.Glob(cfg.Strava.Summaries + "/page*.json")
+func pageFiles(path string) ([]string, error) {
+	fmt.Printf("fetching page files from %s/page*.json\n", path)
+	return filepath.Glob(path + "/page*.json")
 }
 
 func getJsonStatus(ctx context.Context) (jsonStatus, error) {
+	ctx, span := telemetry.NewSpan(ctx, "getJsonStatus")
+	defer span.End()
 	status := jsonStatus{
 		latest: time.Date(1970, time.January, 1, 0, 0, 0, 0, time.UTC),
 		pages:  0,
 		ids:    []int64{},
 	}
-	fnames, err := pageFiles(ctx)
+	cfg, err := config.Get(ctx)
+	if err != nil {
+		return status, telemetry.Error(span, err)
+	}
+	path := cfg.Strava.Summaries
+	fnames, err := pageFiles(path)
 	switch {
 	case err != nil:
 		return status, err
 	case len(fnames) == 0:
-		if _, err = os.Stat("pages"); os.IsNotExist(err) {
-			if err = os.Mkdir("pages", 0750); err != nil {
-				return status, err
+		if _, err = os.Stat(path); os.IsNotExist(err) {
+			if err = os.Mkdir(path, 0750); err != nil {
+				return status, telemetry.Error(span, err)
 			}
 		}
 	}
@@ -180,12 +192,17 @@ func saveActivities(ctx context.Context, call *api.CurrentAthleteListActivitiesC
 	defer span.End()
 	page := 1
 	newIds := []int64{}
+	cfg, err := config.Get(ctx)
+	if err != nil {
+		return newIds, page, telemetry.Error(span, err)
+	}
+	path := cfg.Strava.Summaries
 	for {
 		call = call.Page(page)
 		activities, err := call.Do()
 		if err != nil {
 			if api.IsRateLimitExceeded(err) {
-				return newIds, page, err
+				return newIds, page, telemetry.Error(span, err)
 			}
 			if page == 1 {
 				return newIds, page, fmt.Errorf("run mystats configure --client_id=... --client_secret=... first. err=%w", err)
@@ -193,18 +210,18 @@ func saveActivities(ctx context.Context, call *api.CurrentAthleteListActivitiesC
 			return newIds, page, err
 		}
 		if len(activities) == 0 {
-			return newIds, page, err
+			return newIds, page, telemetry.Error(span, err)
 		}
 		content, err := json.Marshal(activities)
 		if err != nil {
-			return newIds, page, err
+			return newIds, page, telemetry.Error(span, err)
 		}
 		for _, act := range activities {
 			newIds = append(newIds, act.Id)
 		}
-		fmt.Printf("%d activities => pages/page%d.json ...\n", len(activities), page+prior)
-		if err = os.WriteFile(fmt.Sprintf("pages/page%d.json", page+prior), content, 0600); err != nil {
-			return newIds, page, err
+		fmt.Printf("%d activities => %s/page%d.json ...\n", len(activities), path, page+prior)
+		if err = os.WriteFile(fmt.Sprintf("%s/page%d.json", path, page+prior), content, 0600); err != nil {
+			return newIds, page, telemetry.Error(span, err)
 		}
 		if len(activities) < 30 {
 			return newIds, page, nil
