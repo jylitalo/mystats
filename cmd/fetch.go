@@ -132,12 +132,10 @@ func fetchBestEfforts(ctx context.Context, client *api.Client, ids []int64, apiC
 }
 
 func activitiesFiles(path string) ([]string, error) {
-	fmt.Printf("fetching activities files from %s/activity_*.json\n", path)
 	return filepath.Glob(path + "/activity_*.json")
 }
 
 func pageFiles(path string) ([]string, error) {
-	fmt.Printf("fetching page files from %s/page*.json\n", path)
 	return filepath.Glob(path + "/page*.json")
 }
 
