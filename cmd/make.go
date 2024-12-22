@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/jylitalo/mystats/api"
+	"github.com/jylitalo/mystats/config"
 	"github.com/jylitalo/mystats/pkg/telemetry"
 	"github.com/jylitalo/mystats/storage"
 )
@@ -72,8 +73,12 @@ func makeDB(ctx context.Context, update bool) (Storage, error) {
 			return nil, telemetry.Error(span, err)
 		}
 	}
-	pageFnames, errP := pageFiles()
-	actFnames, errF := activitiesFiles()
+	cfg, err := config.Get(ctx)
+	if err != nil {
+		return nil, telemetry.Error(span, err)
+	}
+	pageFnames, errP := pageFiles(cfg.Strava.Summaries)
+	actFnames, errF := activitiesFiles(cfg.Strava.Activities)
 	if err := errors.Join(errP, errF); err != nil {
 		return nil, telemetry.Error(span, err)
 	}

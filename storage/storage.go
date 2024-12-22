@@ -338,20 +338,17 @@ func (sq *Sqlite3) QuerySplit(fields []string, id int64) (*sql.Rows, error) {
 	return rows, err
 }
 
-func (sq *Sqlite3) QuerySummary(fields []string, cond SummaryConditions, order *Order) (*sql.Rows, error) {
+func (sq *Sqlite3) QuerySummary(fields []string, sumCond SummaryConditions, order *Order) (*sql.Rows, error) {
 	if sq.db == nil {
 		return nil, errors.New("database is nil")
 	}
-	query, values := sqlQuery(
-		[]string{"summary"}, fields,
-		conditions{
-			Types: cond.Types, WorkoutTypes: cond.WorkoutTypes,
-			Years: cond.Years, Month: cond.Month, Day: cond.Day,
-			Name: cond.Name, StravaID: cond.StravaID,
-		},
-		order,
-	)
-	// slog.Info("storage.Query", "query", query)
+	genCond := conditions{
+		Types: sumCond.Types, WorkoutTypes: sumCond.WorkoutTypes,
+		Years: sumCond.Years, Month: sumCond.Month, Day: sumCond.Day,
+		Name: sumCond.Name, StravaID: sumCond.StravaID,
+	}
+	query, values := sqlQuery([]string{"summary"}, fields, genCond, order)
+	// slog.Info("storage.QuerySummary", "query", query, "cond", sumCond, "values", values)
 	rows, err := sq.db.Query(query, values...)
 	if err != nil {
 		return nil, fmt.Errorf("%s failed: %w", query, err)
