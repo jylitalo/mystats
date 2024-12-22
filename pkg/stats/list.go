@@ -14,7 +14,7 @@ func List(ctx context.Context, db Storage, types, workouts []string, years []int
 	_, span := telemetry.NewSpan(ctx, "stats.List")
 	defer span.End()
 
-	o := []string{"year", "month", "day"}
+	o := []string{"year", "month", "day", "stravaid"}
 	rows, err := db.QuerySummary(
 		[]string{"year", "month", "day", "name", "distance", "elevation", "elapsedtime", "type", "workouttype", "stravaid"},
 		storage.SummaryConditions{WorkoutTypes: workouts, Types: types, Years: years, Name: name},
