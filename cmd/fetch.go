@@ -117,8 +117,9 @@ func fetchBestEfforts(ctx context.Context, client *api.Client, ids []int64, apiC
 		} else if data, err := json.Marshal(activity); err != nil {
 			return telemetry.Error(span, err)
 		} else {
-			fmt.Printf("%s => %s/activity_%d.json ...\n", activity.StartDateLocal, path, id)
-			if err = os.WriteFile(fmt.Sprintf("%s/activity_%d.json", path, id), data, 0600); err != nil {
+			fname := fmt.Sprintf("%s/activity_%d.json ...\n", path, id)
+			fmt.Printf("%s => %s ...\n", activity.StartDateLocal, fname)
+			if err = os.WriteFile(fname, data, 0600); err != nil {
 				return telemetry.Error(span, err)
 			}
 		}
@@ -217,8 +218,9 @@ func saveActivities(ctx context.Context, call *api.CurrentAthleteListActivitiesC
 		for _, act := range activities {
 			newIds = append(newIds, act.Id)
 		}
-		fmt.Printf("%d activities => %s/page%d.json ...\n", len(activities), path, page+prior)
-		if err = os.WriteFile(fmt.Sprintf("%s/page%d.json", path, page+prior), content, 0600); err != nil {
+		fname := fmt.Sprintf("%s/page%d.json", path, page+prior)
+		fmt.Printf("%d activities => %s ...\n", len(activities), fname)
+		if err = os.WriteFile(fname, content, 0600); err != nil {
 			return newIds, page, telemetry.Error(span, err)
 		}
 		if len(activities) < 30 {
