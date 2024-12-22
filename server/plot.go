@@ -134,7 +134,7 @@ func (p *PlotPage) render(
 	scriptRows := [][]interface{}{}
 	for day := range numbers[foundYears[0]] {
 		scriptRows = append(scriptRows, make([]interface{}, len(foundYears)+1))
-		index0 := refTime.Add(24 * time.Hour)
+		index0 := refTime.Add(24 * time.Duration(day) * time.Hour)
 		// Month in JavaScript's Date is 0-indexed
 		newDate := fmt.Sprintf("new Date(%d, %d, %d)", index0.Year(), index0.Month()-1, index0.Day())
 		scriptRows[day][0] = template.JS(newDate) // #nosec G203
