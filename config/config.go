@@ -10,11 +10,11 @@ import (
 
 	"gopkg.in/yaml.v2"
 
-	"github.com/jylitalo/mystats/api"
+	"github.com/jylitalo/mystats/api/strava"
 )
 
 type Config struct {
-	Strava  *api.Config `yaml:"strava"`
+	Strava  *strava.Config `yaml:"strava"`
 	Default struct {
 		Types []string `yaml:"types"`
 	} `yaml:"default"`
@@ -49,7 +49,7 @@ func Read(ctx context.Context, refresh bool) (context.Context, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error in reading .mystats.yaml")
 	}
-	cfg := Config{Strava: &api.Config{}}
+	cfg := Config{Strava: &strava.Config{}}
 	if err = yaml.Unmarshal(body, &cfg); err != nil {
 		return nil, fmt.Errorf("error in parsing .mystats.yaml")
 	}

@@ -11,7 +11,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/spf13/cobra"
 
-	"github.com/jylitalo/mystats/api"
+	"github.com/jylitalo/mystats/api/strava"
 	"github.com/jylitalo/mystats/config"
 	"github.com/jylitalo/mystats/pkg/telemetry"
 	"github.com/jylitalo/mystats/storage"
@@ -92,7 +92,7 @@ func makeDB(ctx context.Context, update bool) (Storage, error) {
 	}
 	slog.Info("Making database")
 	dbActivities := []storage.SummaryRecord{}
-	if activities, err := api.ReadSummaryJSONs(pageFnames); err != nil {
+	if activities, err := strava.ReadSummaryJSONs(pageFnames); err != nil {
 		return nil, telemetry.Error(span, err)
 	} else {
 		for _, activity := range activities {
@@ -117,7 +117,7 @@ func makeDB(ctx context.Context, update bool) (Storage, error) {
 	}
 	dbEfforts := []storage.BestEffortRecord{}
 	dbSplits := []storage.SplitRecord{}
-	if acts, err := api.ReadActivityJSONs(ctx, actFnames); err != nil {
+	if acts, err := strava.ReadActivityJSONs(ctx, actFnames); err != nil {
 		return nil, telemetry.Error(span, err)
 	} else {
 		for _, activity := range acts {
