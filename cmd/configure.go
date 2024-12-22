@@ -11,7 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/jylitalo/mystats/api"
+	"github.com/jylitalo/mystats/api/strava"
 	"github.com/jylitalo/mystats/config"
 )
 
@@ -49,7 +49,7 @@ func configureCmd() *cobra.Command {
 				return errors.New("code missing from authorize request")
 			}
 			slog.Debug("code from authorize", "code", code[0])
-			tokens := &api.Config{ClientID: clientID, ClientSecret: clientSecret}
+			tokens := &strava.Config{ClientID: clientID, ClientSecret: clientSecret}
 			if tokens, err = tokens.AuthorizationCode(code[0]); err != nil {
 				return err
 			}

@@ -1,4 +1,4 @@
-package api
+package strava
 
 // Copied from https://github.com/strava/go.strava/blob/99ebe972ba16ef3e1b1e5f62003dae3ac06f3adb/current_athlete.go
 // so that we were able to use our own ActivitySummary (defined in activities.go)

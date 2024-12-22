@@ -15,7 +15,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/jylitalo/mystats/api"
+	"github.com/jylitalo/mystats/api/strava"
 	"github.com/jylitalo/mystats/config"
 	"github.com/jylitalo/mystats/pkg/telemetry"
 )
@@ -59,27 +59,27 @@ func fetch(ctx context.Context, best_efforts bool) error {
 		ids = append(ids, status.ids...)
 		err = fetchBestEfforts(ctx, client, ids, apiCalls)
 	}
-	if err != nil && api.IsRateLimitExceeded(err) {
+	if err != nil && strava.IsRateLimitExceeded(err) {
 		slog.Warn("Strava API Rate Limit Exceeded")
 		return nil
 	}
 	return telemetry.Error(span, err)
 }
 
-func getClient(ctx context.Context) (context.Context, *api.Client, error) {
+func getClient(ctx context.Context) (context.Context, *strava.Client, error) {
 	ctx, errR := config.Read(ctx, true)
 	cfg, errG := config.Get(ctx)
 	if err := errors.Join(errR, errG); err != nil {
 		return ctx, nil, err
 	}
-	strava := cfg.Strava
-	api.ClientId = strava.ClientID
-	api.ClientSecret = strava.ClientSecret
-	client := api.NewClient(strava.AccessToken)
+	stravaCfg := cfg.Strava
+	strava.ClientId = stravaCfg.ClientID
+	strava.ClientSecret = stravaCfg.ClientSecret
+	client := strava.NewClient(stravaCfg.AccessToken)
 	return ctx, client, nil
 }
 
-func fetchBestEfforts(ctx context.Context, client *api.Client, ids []int64, apiCalls int) error {
+func fetchBestEfforts(ctx context.Context, client *strava.Client, ids []int64, apiCalls int) error {
 	ctx, span := telemetry.NewSpan(ctx, "fetchfetchBestEfforts")
 	defer span.End()
 	if len(ids) == 0 {
@@ -107,7 +107,7 @@ func fetchBestEfforts(ctx context.Context, client *api.Client, ids []int64, apiC
 		i, _ := strconv.Atoi(intStr)
 		alreadyFetched = append(alreadyFetched, int64(i))
 	}
-	service := api.NewActivitiesService(ctx, client)
+	service := strava.NewActivitiesService(ctx, client)
 	for idx, id := range ids {
 		if slices.Contains[[]int64, int64](alreadyFetched, id) {
 			continue
@@ -165,7 +165,7 @@ func getJsonStatus(ctx context.Context) (jsonStatus, error) {
 		}
 	}
 	status.pages = len(fnames)
-	activities, err := api.ReadSummaryJSONs(fnames)
+	activities, err := strava.ReadSummaryJSONs(fnames)
 	if err != nil {
 		return status, err
 	}
@@ -178,15 +178,15 @@ func getJsonStatus(ctx context.Context) (jsonStatus, error) {
 	return status, nil
 }
 
-func callListActivities(ctx context.Context, client *api.Client, after time.Time) (*api.CurrentAthleteListActivitiesCall, error) {
+func callListActivities(ctx context.Context, client *strava.Client, after time.Time) (*strava.CurrentAthleteListActivitiesCall, error) {
 	_, span := telemetry.NewSpan(ctx, "callListActivities")
 	defer span.End()
-	current := api.NewCurrentAthleteService(client)
+	current := strava.NewCurrentAthleteService(client)
 	call := current.ListActivities()
 	return call.After(int(after.Unix())), nil
 }
 
-func saveActivities(ctx context.Context, call *api.CurrentAthleteListActivitiesCall, prior int) ([]int64, int, error) {
+func saveActivities(ctx context.Context, call *strava.CurrentAthleteListActivitiesCall, prior int) ([]int64, int, error) {
 	_, span := telemetry.NewSpan(ctx, "saveActivities")
 	defer span.End()
 	page := 1
@@ -200,7 +200,7 @@ func saveActivities(ctx context.Context, call *api.CurrentAthleteListActivitiesC
 		call = call.Page(page)
 		activities, err := call.Do()
 		if err != nil {
-			if api.IsRateLimitExceeded(err) {
+			if strava.IsRateLimitExceeded(err) {
 				return newIds, page, telemetry.Error(span, err)
 			}
 			if page == 1 {
