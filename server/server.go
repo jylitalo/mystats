@@ -6,7 +6,6 @@ import (
 	"errors"
 	"html/template"
 	"io"
-	"log/slog"
 	"net/url"
 	"slices"
 	"strconv"
@@ -173,6 +172,7 @@ func yearValues(values url.Values) (map[int]bool, error) {
 			years[y] = (len(v) > 0 && v[0] == "on")
 		}
 	}
+	// slog.Info("server.yearValues", "years", years)
 	return years, nil
 }
 
@@ -221,7 +221,6 @@ func Start(ctx context.Context, db Storage, selectedTypes []string, port int) er
 		value = false
 	}
 	span.End()
-	slog.Info("starting things", "page", page)
 
 	e.GET("/", indexGet(ctx, page, db))
 	e.POST("/best", bestPost(ctx, page, db))
@@ -247,8 +246,9 @@ func indexGet(ctx context.Context, page *Page, db Storage) func(c echo.Context) 
 		types := selectedTypes(pf.Types)
 		workoutTypes := selectedWorkoutTypes(pf.WorkoutTypes)
 		years := selectedYears(pf.Years)
+		plfYears := selectedYears(page.List.Form.Years)
 		pld := &page.List.Data
-		pld.Headers, pld.Rows, errL = stats.List(ctx, db, types, workoutTypes, years, page.List.Form.Limit, "")
+		pld.Headers, pld.Rows, errL = stats.List(ctx, db, types, workoutTypes, plfYears, page.List.Form.Limit, "")
 		// init Top tab
 		tf := &page.Top.Form
 		td := &page.Top.Data

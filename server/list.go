@@ -27,7 +27,7 @@ func newListFormData() ListFormData {
 		Types:        map[string]bool{},
 		WorkoutTypes: map[string]bool{},
 		Years:        map[int]bool{},
-		Limit:        100,
+		Limit:        1000,
 	}
 }
 
@@ -68,6 +68,7 @@ func listPost(ctx context.Context, page *Page, db Storage) func(c echo.Context) 
 		limit, errL := strconv.Atoi(c.FormValue("limit"))
 		name := c.FormValue("name")
 		if err = errors.Join(errV, errT, errW, errY, errL); err != nil {
+			slog.Error("server.listPost()", "err", err)
 			_ = telemetry.Error(span, err)
 		}
 		slog.Info("POST /list", "values", values)
