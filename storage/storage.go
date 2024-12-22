@@ -250,7 +250,7 @@ func sqlQuery(tables []string, fields []string, cond conditions, order *Order) (
 	}
 	if cond.StravaID > 0 {
 		for _, t := range tables {
-			where = append(where, t+".stravaid=")
+			where = append(where, t+".stravaid=?")
 			args = append(args, strconv.FormatInt(cond.StravaID, 10))
 		}
 	}
