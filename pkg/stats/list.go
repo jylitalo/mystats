@@ -3,7 +3,6 @@ package stats
 import (
 	"context"
 	"fmt"
-	"math"
 	"strconv"
 
 	"github.com/jylitalo/mystats/pkg/telemetry"
@@ -36,7 +35,7 @@ func List(ctx context.Context, db Storage, types, workouts []string, years []int
 		results = append(results, []string{
 			strconv.Itoa(stravaID),
 			fmt.Sprintf("%2d.%2d.%d", day, month, year), name,
-			fmt.Sprintf("%.1f", math.Round(distance/1000)), fmt.Sprintf("%.0f", elevation),
+			fmt.Sprintf("%.1f", distance/1000), fmt.Sprintf("%.0f", elevation),
 			fmt.Sprintf("%2d:%02d:%02d", elapsedTime/3600, elapsedTime/60%60, elapsedTime%60),
 			typeName, workoutType, fmt.Sprintf("https://strava.com/activities/%d", stravaID),
 		})
