@@ -208,8 +208,9 @@ func Start(ctx context.Context, db Storage, selectedTypes []string, port int) er
 		page.Plot.Form.WorkoutTypes[t] = true
 		page.Top.Form.WorkoutTypes[t] = true
 	}
+	currentYear := time.Now().Year()
 	for _, y := range years {
-		page.List.Form.Years[y] = true
+		page.List.Form.Years[y] = y == currentYear
 		page.Plot.Form.Years[y] = true
 		page.Top.Form.Years[y] = true
 	}
