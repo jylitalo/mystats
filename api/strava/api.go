@@ -15,6 +15,7 @@ import (
 	strava "github.com/strava/go.strava"
 )
 
+// Config requires that you modify Refresh() if you add new fields into struct
 type Config struct {
 	ClientID     int    `yaml:"clientID" json:"client_id"`
 	ClientSecret string `yaml:"clientSecret" json:"client_secret"`
@@ -110,6 +111,7 @@ func ReadActivityJSONs(ctx context.Context, fnames []string) ([]strava.ActivityD
 	return acts, nil
 }
 
+// ReadSummaryJSONs reads on pages JSON files
 func ReadSummaryJSONs(fnames []string) ([]ActivitySummary, error) {
 	ids := map[int64]string{}
 	activities := []ActivitySummary{}
