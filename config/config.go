@@ -10,10 +10,12 @@ import (
 
 	"gopkg.in/yaml.v2"
 
+	"github.com/jylitalo/mystats/api/garmin"
 	"github.com/jylitalo/mystats/api/strava"
 )
 
 type Config struct {
+	Garmin  *garmin.Config `yaml:"garmin"`
 	Strava  *strava.Config `yaml:"strava"`
 	Default struct {
 		Types []string `yaml:"types"`
@@ -52,6 +54,9 @@ func Read(ctx context.Context, refresh bool) (context.Context, error) {
 	cfg := Config{Strava: &strava.Config{}}
 	if err = yaml.Unmarshal(body, &cfg); err != nil {
 		return nil, fmt.Errorf("error in parsing .mystats.yaml")
+	}
+	if cfg.Garmin.DailySteps == "" {
+		cfg.Garmin.DailySteps = "daily_steps"
 	}
 	if cfg.Strava.Activities == "" {
 		cfg.Strava.Activities = "activities"

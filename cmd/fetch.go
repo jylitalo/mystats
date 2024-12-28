@@ -13,8 +13,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/labstack/gommon/log"
 	"github.com/spf13/cobra"
 
+	"github.com/jylitalo/mystats/api/garmin"
 	"github.com/jylitalo/mystats/api/strava"
 	"github.com/jylitalo/mystats/config"
 	"github.com/jylitalo/mystats/pkg/telemetry"
@@ -45,8 +47,15 @@ func fetch(ctx context.Context, best_efforts bool) error {
 	ctx, span := telemetry.NewSpan(ctx, "fetch")
 	defer span.End()
 
+	ctx, err := config.Read(ctx, true)
+	if err != nil {
+		return telemetry.Error(span, err)
+	}
+	if err := getDailySteps(ctx); err != nil {
+		return telemetry.Error(span, err)
+	}
 	status, errS := getJsonStatus(ctx)
-	ctx, client, errC := getClient(ctx)
+	ctx, client, errC := getStravaClient(ctx)
 	if err := errors.Join(errS, errC); err != nil {
 		return telemetry.Error(span, err)
 	}
@@ -66,10 +75,61 @@ func fetch(ctx context.Context, best_efforts bool) error {
 	return telemetry.Error(span, err)
 }
 
-func getClient(ctx context.Context) (context.Context, *strava.Client, error) {
-	ctx, errR := config.Read(ctx, true)
-	cfg, errG := config.Get(ctx)
-	if err := errors.Join(errR, errG); err != nil {
+func getDailySteps(ctx context.Context) error {
+	ctx, span := telemetry.NewSpan(ctx, "getDailySteps")
+	defer span.End()
+	cfg, err := config.Get(ctx)
+	if err != nil {
+		return err
+	}
+	client, err := garmin.NewUserSummary(cfg.Garmin.Username, cfg.Garmin.Password)
+	if err != nil {
+		return err
+	}
+	all := false
+	path := cfg.Garmin.DailySteps
+	if path == "" {
+		return telemetry.Error(span, errors.New("path is empty"))
+	}
+	stepsFiles, err := stepsFiles(path)
+	switch {
+	case err != nil:
+		return err
+	case len(stepsFiles) == 0:
+		if _, err = os.Stat(path); os.IsNotExist(err) {
+			if err = os.Mkdir(path, 0750); err != nil {
+				err = fmt.Errorf("mkdir '%s' failed due to %w", path, err)
+				return telemetry.Error(span, err)
+			}
+		}
+		all = true
+	}
+	steps, err := garmin.DailySteps(client, all)
+	if err != nil {
+		return err
+	}
+	for idx, val := range steps {
+		fname := fmt.Sprintf("%s/steps_%d.json", path, len(stepsFiles)+idx+1)
+		data, err := json.Marshal(val)
+		if err != nil {
+			return err
+		}
+		if err := os.WriteFile(fname, data, 0600); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func stepsFiles(path string) ([]string, error) {
+	return filepath.Glob(path + "/steps*.json")
+}
+
+func getStravaClient(ctx context.Context) (context.Context, *strava.Client, error) {
+	ctx, span := telemetry.NewSpan(ctx, "getStravaClient")
+	defer span.End()
+	cfg, err := config.Get(ctx)
+	if err != nil {
 		return ctx, nil, err
 	}
 	stravaCfg := cfg.Strava
@@ -90,6 +150,9 @@ func fetchBestEfforts(ctx context.Context, client *strava.Client, ids []int64, a
 		return err
 	}
 	path := cfg.Strava.Activities
+	if path == "" {
+		return telemetry.Error(span, errors.New("path is empty"))
+	}
 	actFiles, err := activitiesFiles(path)
 	switch {
 	case err != nil:
@@ -97,6 +160,7 @@ func fetchBestEfforts(ctx context.Context, client *strava.Client, ids []int64, a
 	case len(actFiles) == 0:
 		if _, err = os.Stat(path); os.IsNotExist(err) {
 			if err = os.Mkdir(path, 0750); err != nil {
+				err = fmt.Errorf("mkdir '%s' failed due to %w", path, err)
 				return telemetry.Error(span, err)
 			}
 		}
@@ -117,9 +181,10 @@ func fetchBestEfforts(ctx context.Context, client *strava.Client, ids []int64, a
 		} else if data, err := json.Marshal(activity); err != nil {
 			return telemetry.Error(span, err)
 		} else {
-			fname := fmt.Sprintf("%s/activity_%d.json ...\n", path, id)
-			fmt.Printf("%s => %s ...\n", activity.StartDateLocal, fname)
+			fname := fmt.Sprintf("%s/activity_%d.json", path, id)
+			fmt.Printf("%s ==> %s ...\n", activity.StartDateLocal, fname)
 			if err = os.WriteFile(fname, data, 0600); err != nil {
+				log.Fatal(err)
 				return telemetry.Error(span, err)
 			}
 		}
@@ -160,6 +225,7 @@ func getJsonStatus(ctx context.Context) (jsonStatus, error) {
 	case len(fnames) == 0:
 		if _, err = os.Stat(path); os.IsNotExist(err) {
 			if err = os.Mkdir(path, 0750); err != nil {
+
 				return status, telemetry.Error(span, err)
 			}
 		}

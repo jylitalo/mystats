@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	garmin "github.com/jylitalo/go-garmin"
 	"github.com/jylitalo/mystats/pkg/telemetry"
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -45,6 +46,14 @@ type SplitRecord struct {
 	MovingTime    int
 	ElevationDiff float64
 	Distance      float64
+}
+
+type DailyStepsRecord struct {
+	Year       int
+	Month      int
+	Day        int
+	Week       int
+	TotalSteps int
 }
 
 type SummaryConditions struct {
@@ -140,7 +149,15 @@ func (sq *Sqlite3) Create() error {
 		Distance      real,
 		ElevationDiff real
 	)`)
-	return errors.Join(errSummary, errBE, errSplit)
+	_, errSteps := sq.db.Exec(`create table DailySteps (
+		Year        integer,
+		Month       integer,
+		Day         integer,
+		Week        integer,
+		TotalSteps  integer,
+		StepGoal    integer
+	)`)
+	return errors.Join(errSummary, errBE, errSplit, errSteps)
 }
 
 func (sq *Sqlite3) InsertSummary(ctx context.Context, records []SummaryRecord) error {
@@ -165,7 +182,7 @@ func (sq *Sqlite3) InsertSummary(ctx context.Context, records []SummaryRecord) e
 			r.Distance, r.Elevation, r.ElapsedTime, r.MovingTime,
 		)
 		if err != nil {
-			return fmt.Errorf("statement execution caused: %w", err)
+			return fmt.Errorf("InsertSummary statement execution caused: %w", err)
 		}
 	}
 	return telemetry.Error(span, tx.Commit())
@@ -188,7 +205,7 @@ func (sq *Sqlite3) InsertBestEffort(ctx context.Context, records []BestEffortRec
 	defer stmt.Close()
 	for _, r := range records {
 		if _, err = stmt.Exec(r.StravaID, r.Name, r.ElapsedTime, r.MovingTime, r.Distance); err != nil {
-			return telemetry.Error(span, fmt.Errorf("statement execution caused: %w", err))
+			return telemetry.Error(span, fmt.Errorf("InsertBestEffort statement execution caused: %w", err))
 		}
 	}
 	return telemetry.Error(span, tx.Commit())
@@ -211,9 +228,37 @@ func (sq *Sqlite3) InsertSplit(ctx context.Context, records []SplitRecord) error
 	defer stmt.Close()
 	for _, r := range records {
 		if _, err = stmt.Exec(r.StravaID, r.Split, r.ElapsedTime, r.MovingTime, r.Distance, r.ElevationDiff); err != nil {
-			return telemetry.Error(span, fmt.Errorf("statement execution caused: %w", err))
+			return telemetry.Error(span, fmt.Errorf("InsertSplit statement execution caused: %w", err))
 		}
 	}
+	return telemetry.Error(span, tx.Commit())
+}
+
+func (sq *Sqlite3) InsertDailySteps(ctx context.Context, records map[string]garmin.DailyStepsStat) error {
+	_, span := telemetry.NewSpan(ctx, "InsertDailySteps")
+	defer span.End()
+	if sq.db == nil {
+		return telemetry.Error(span, errors.New("database is nil"))
+	}
+	tx, err := sq.db.Begin()
+	if err != nil {
+		return telemetry.Error(span, err)
+	}
+	stmt, err := tx.Prepare(`insert into DailySteps(Year,Month,Day,Week,TotalSteps,StepGoal) values (?,?,?,?,?,?)`)
+	if err != nil {
+		return telemetry.Error(span, fmt.Errorf("insert caused %w", err))
+	}
+	for key, r := range records {
+		t, err := time.Parse(time.DateOnly, key)
+		if err != nil {
+			return telemetry.Error(span, fmt.Errorf("InsertDailySteps time parsing (%s) caused: %w", key, err))
+		}
+		_, week := t.ISOWeek()
+		if _, err = stmt.Exec(t.Year(), t.Month(), t.Day(), week, r.TotalSteps, r.StepGoal); err != nil {
+			return telemetry.Error(span, fmt.Errorf("InsertDailySteps statement execution caused: %w", err))
+		}
+	}
+	defer stmt.Close()
 	return telemetry.Error(span, tx.Commit())
 }
 
@@ -331,6 +376,20 @@ func (sq *Sqlite3) QuerySplit(fields []string, id int64) (*sql.Rows, error) {
 		[]string{"split"}, fields, conditions{StravaID: id}, &Order{OrderBy: []string{"split"}},
 	)
 	// slog.Info("storage.Query", "query", query)
+	rows, err := sq.db.Query(query, values...)
+	if err != nil {
+		return nil, fmt.Errorf("%s failed: %w", query, err)
+	}
+	return rows, err
+}
+
+func (sq *Sqlite3) QuerySteps(fields []string, sumCond SummaryConditions, order *Order) (*sql.Rows, error) {
+	if sq.db == nil {
+		return nil, errors.New("database is nil")
+	}
+	genCond := conditions{Years: sumCond.Years, Month: sumCond.Month, Day: sumCond.Day}
+	query, values := sqlQuery([]string{"dailysteps"}, fields, genCond, order)
+	// slog.Info("storage.QuerySteps", "query", query, "cond", sumCond, "values", values)
 	rows, err := sq.db.Query(query, values...)
 	if err != nil {
 		return nil, fmt.Errorf("%s failed: %w", query, err)
