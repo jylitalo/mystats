@@ -86,6 +86,8 @@ func (cfg *Config) Refresh() (*Config, bool, error) {
 	}
 	tokens.ClientID = cfg.ClientID
 	tokens.ClientSecret = cfg.ClientSecret
+	tokens.Activities = cfg.Activities
+	tokens.Summaries = cfg.Summaries
 	return &tokens, true, nil
 }
 
