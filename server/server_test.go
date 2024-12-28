@@ -26,6 +26,10 @@ func (t *testDB) QuerySplit(fields []string, id int64) (*sql.Rows, error) {
 	return nil, nil
 }
 
+func (t *testDB) QuerySteps(fields []string, cond storage.SummaryConditions, order *storage.Order) (*sql.Rows, error) {
+	return nil, nil
+}
+
 func (t *testDB) QuerySummary(fields []string, cond storage.SummaryConditions, order *storage.Order) (*sql.Rows, error) {
 	return nil, nil
 }

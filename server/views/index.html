@@ -10,10 +10,11 @@
     </head>
     <body>
         <div class="tab">
-            <button class="tablinks" onclick="openTab(event, 'Plot')" id="defaultOpen">Plot</button>
+            <button class="tablinks" onclick="openTab(event, 'Plot')">Plot</button>
             <button class="tablinks" onclick="openTab(event, 'Best')">Best Running Efforts</button>
             <button class="tablinks" onclick="openTab(event, 'List')">List</button>
             <button class="tablinks" onclick="openTab(event, 'Top')">Top</button>
+            <button class="tablinks" onclick="openTab(event, 'Steps')" id="defaultOpen">Steps</button>
         </div>
         <div id="Plot" class="tabcontent">
             {{ template "plot-tab" .Plot }}
@@ -27,8 +28,11 @@
         <div id="Top" class="tabcontent">
             {{ template "top-tab" .Top }}
         </div>
+        <div id="Steps" class="tabcontent">
+            {{ template "steps-tab" .Steps }}
+        </div>
         <script>
-            function openTab(evt, cityName) {
+            function openTab(evt, tabName) {
               // Declare all variables
               var i, tabcontent, tablinks;
             
@@ -45,7 +49,7 @@
               }
             
               // Show the current tab, and add an "active" class to the button that opened the tab
-              document.getElementById(cityName).style.display = "block";
+              document.getElementById(tabName).style.display = "block";
               evt.currentTarget.className += " active";
             }
             document.getElementById("defaultOpen").click();

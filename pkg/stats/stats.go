@@ -17,7 +17,10 @@ type Storage interface {
 	QueryYears(cond storage.SummaryConditions) ([]int, error)
 }
 
-func Stats(ctx context.Context, db Storage, measure, period string, types, workoutTypes []string, month, day int, years []int) ([]int, [][]string, []string, error) {
+func Stats(
+	ctx context.Context, db Storage, measure, period string, types, workoutTypes []string,
+	month, day int, years []int,
+) ([]int, [][]string, []string, error) {
 	_, span := telemetry.NewSpan(ctx, "stats.Stats")
 	defer span.End()
 

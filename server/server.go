@@ -24,6 +24,7 @@ type Storage interface {
 	QueryBestEffort(fields []string, name string, order *storage.Order) (*sql.Rows, error)
 	QueryBestEffortDistances() ([]string, error)
 	QuerySplit(fields []string, id int64) (*sql.Rows, error)
+	QuerySteps(fields []string, cond storage.SummaryConditions, order *storage.Order) (*sql.Rows, error)
 	QuerySummary(fields []string, cond storage.SummaryConditions, order *storage.Order) (*sql.Rows, error)
 	QueryTypes(cond storage.SummaryConditions) ([]string, error)
 	QueryWorkoutTypes(cond storage.SummaryConditions) ([]string, error)
@@ -43,18 +44,20 @@ func newTableData() TableData {
 }
 
 type Page struct {
-	Plot *PlotPage
-	Best *BestPage
-	List *ListPage
-	Top  *TopPage
+	Plot  *PlotPage
+	Best  *BestPage
+	List  *ListPage
+	Top   *TopPage
+	Steps *StepsPage
 }
 
 func newPage() *Page {
 	return &Page{
-		Plot: newPlotPage(),
-		Best: newBestPage(),
-		List: newListPage(),
-		Top:  newTopPage(),
+		Plot:  newPlotPage(),
+		Best:  newBestPage(),
+		List:  newListPage(),
+		Top:   newTopPage(),
+		Steps: newStepsPage(),
 	}
 }
 
@@ -213,6 +216,7 @@ func Start(ctx context.Context, db Storage, selectedTypes []string, port int) er
 		page.List.Form.Years[y] = y == currentYear
 		page.Plot.Form.Years[y] = true
 		page.Top.Form.Years[y] = true
+		page.Steps.Form.Years[y] = true
 	}
 	value := true
 	page.Best.Form.InOrder = bestEfforts
@@ -228,6 +232,7 @@ func Start(ctx context.Context, db Storage, selectedTypes []string, port int) er
 	e.POST("/list", listPost(ctx, page, db))
 	e.POST("/plot", plotPost(ctx, page, db))
 	e.POST("/top", topPost(ctx, page, db))
+	e.POST("/steps", stepsPost(ctx, page, db))
 	e.Logger.Fatal(e.Start(":" + strconv.FormatInt(int64(port), 10)))
 	return nil
 }
@@ -246,6 +251,8 @@ func indexGet(ctx context.Context, page *Page, db Storage) func(c echo.Context) 
 		types := selectedTypes(pf.Types)
 		workoutTypes := selectedWorkoutTypes(pf.WorkoutTypes)
 		years := selectedYears(pf.Years)
+		sp := &page.Steps.Form
+		errS := page.Steps.render(ctx, db, sp.EndMonth, sp.EndDay, sp.Years, sp.Period)
 		plfYears := selectedYears(page.List.Form.Years)
 		pld := &page.List.Data
 		pld.Headers, pld.Rows, errL = stats.List(ctx, db, types, workoutTypes, plfYears, page.List.Form.Limit, "")
@@ -261,6 +268,6 @@ func indexGet(ctx context.Context, page *Page, db Storage) func(c echo.Context) 
 				page.Best.Data.Data = append(page.Best.Data.Data, TableData{Headers: headers, Rows: rows})
 			}
 		}
-		return telemetry.Error(span, errors.Join(errP, errL, errT, c.Render(200, "index", page)))
+		return telemetry.Error(span, errors.Join(errP, errL, errT, errS, c.Render(200, "index", page)))
 	}
 }
