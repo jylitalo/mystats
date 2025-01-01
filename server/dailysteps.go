@@ -83,7 +83,7 @@ func stepsStats(
 		}
 	}
 	rows, err := db.QuerySteps(
-		[]string{"year", period, "totalsteps"}, cond,
+		[]string{"year", period, "sum(totalsteps)"}, cond,
 		&storage.Order{GroupBy: []string{period, "year"}, OrderBy: []string{period, "year"}},
 	)
 	if err != nil {
@@ -91,8 +91,8 @@ func stepsStats(
 	}
 	defer rows.Close()
 	totalsAbs := make([]float64, len(years))
-	modifier := float64(1)
-	unit := "%4.0fm"
+	modifier := float64(1000)
+	unit := "%6.1fk"
 	for rows.Next() {
 		var year, periodValue int
 		var measureValue float64
