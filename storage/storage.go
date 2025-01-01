@@ -88,6 +88,10 @@ type Sqlite3 struct {
 }
 
 const dbName string = "mystats.sql"
+const bestEffortTable string = "BestEffort"
+const dailyStepsTable string = "DailySteps"
+const splitTable string = "Split"
+const summaryTable string = "Summary"
 
 func (sq *Sqlite3) Remove() error {
 	if _, err := os.Stat(dbName); err != nil && errors.Is(err, os.ErrNotExist) {
@@ -119,41 +123,24 @@ func (sq *Sqlite3) Create() error {
 	if sq.db == nil {
 		return errors.New("database is nil")
 	}
-	_, errSummary := sq.db.Exec(`create table Summary (
-		Year        integer,
-		Month       integer,
-		Day         integer,
-		Week        integer,
-		StravaID    integer,
+	ymdw := "Year integer, Month integer, Day integer, Week integer,"
+	stravaId := "StravaID integer,"
+	emd := "ElapsedTime integer, MovingTime integer, Distance integer,"
+	_, errSummary := sq.db.Exec(`create table ` + summaryTable + ` ( ` + ymdw + stravaId + emd + `
 		Name        text,
 		Type        text,
 		SportType   text,
 		WorkoutType text,
-		Distance    real,
-		Elevation   real,
-		ElapsedTime integer,
-		MovingTime  integer
+		Elevation   real
 	)`)
-	_, errBE := sq.db.Exec(`create table BestEffort (
-		StravaID    integer,
-		Name        text,
-		ElapsedTime integer,
-		MovingTime  integer,
-		Distance    integer
+	_, errBE := sq.db.Exec(`create table ` + bestEffortTable + ` ( ` + stravaId + emd + `
+		Name        text
 	)`)
-	_, errSplit := sq.db.Exec(`create table Split (
-		StravaID      integer,
+	_, errSplit := sq.db.Exec(`create table ` + splitTable + ` ( ` + stravaId + emd + `
 		Split         integer,
-		ElapsedTime   integer,
-		MovingTime    integer,
-		Distance      real,
 		ElevationDiff real
 	)`)
-	_, errSteps := sq.db.Exec(`create table DailySteps (
-		Year        integer,
-		Month       integer,
-		Day         integer,
-		Week        integer,
+	_, errSteps := sq.db.Exec(`create table ` + dailyStepsTable + ` ( ` + ymdw + `
 		TotalSteps  integer,
 		StepGoal    integer
 	)`)
@@ -170,7 +157,12 @@ func (sq *Sqlite3) InsertSummary(ctx context.Context, records []SummaryRecord) e
 	if err != nil {
 		return telemetry.Error(span, err)
 	}
-	stmt, err := tx.Prepare(`insert into summary(Year,Month,Day,Week,StravaID,Name,Type,SportType,WorkoutType,Distance,Elevation,ElapsedTime,MovingTime) values (?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+	fields := []string{
+		"Year", "Month", "Day", "Week", "StravaID", "Name", "Type", "SportType", "WorkoutType",
+		"Distance", "Elevation", "ElapsedTime", "MovingTime",
+	}
+	q := strings.Repeat("?,", len(fields)-1) + "?"
+	stmt, err := tx.Prepare("insert into " + summaryTable + "(" + strings.Join(fields, ",") + ") values (" + q + ")")
 	if err != nil {
 		return telemetry.Error(span, fmt.Errorf("insert caused %w", err))
 	}
@@ -198,7 +190,9 @@ func (sq *Sqlite3) InsertBestEffort(ctx context.Context, records []BestEffortRec
 	if err != nil {
 		return telemetry.Error(span, err)
 	}
-	stmt, err := tx.Prepare(`insert into BestEffort(StravaID,Name,ElapsedTime,MovingTime,Distance) values (?,?,?,?,?)`)
+	fields := []string{"StravaID", "Name", "ElapsedTime", "MovingTime", "Distance"}
+	q := strings.Repeat("?,", len(fields)-1) + "?"
+	stmt, err := tx.Prepare("insert into " + bestEffortTable + "(" + strings.Join(fields, ",") + ") values (" + q + ")")
 	if err != nil {
 		return telemetry.Error(span, fmt.Errorf("insert caused %w", err))
 	}
@@ -221,7 +215,9 @@ func (sq *Sqlite3) InsertSplit(ctx context.Context, records []SplitRecord) error
 	if err != nil {
 		return telemetry.Error(span, err)
 	}
-	stmt, err := tx.Prepare(`insert into Split(StravaID,Split,ElapsedTime,MovingTime,Distance,ElevationDiff) values (?,?,?,?,?,?)`)
+	fields := []string{"StravaID", "Split", "ElapsedTime", "MovingTime", "Distance", "ElevationDiff"}
+	q := strings.Repeat("?,", len(fields)-1) + "?"
+	stmt, err := tx.Prepare("insert into " + splitTable + "(" + strings.Join(fields, ",") + ") values (" + q + ")")
 	if err != nil {
 		return telemetry.Error(span, fmt.Errorf("insert caused %w", err))
 	}
@@ -290,7 +286,7 @@ func sqlQuery(tables []string, fields []string, cond conditions, order *Order) (
 		}
 	}
 	if cond.BEName != "" {
-		where = append(where, "besteffort.name=?")
+		where = append(where, bestEffortTable+".name=?")
 		args = append(args, cond.BEName)
 	}
 	if cond.StravaID > 0 {
@@ -333,7 +329,7 @@ func (sq *Sqlite3) QueryBestEffort(fields []string, name string, order *Order) (
 	if sq.db == nil {
 		return nil, errors.New("database is nil")
 	}
-	query, values := sqlQuery([]string{"besteffort", "summary"}, fields, conditions{BEName: name}, order)
+	query, values := sqlQuery([]string{bestEffortTable, summaryTable}, fields, conditions{BEName: name}, order)
 	// slog.Info("storage.Query", "query", query)
 	rows, err := sq.db.Query(query, values...)
 	if err != nil {
@@ -347,7 +343,7 @@ func (sq *Sqlite3) QueryBestEffortDistances() ([]string, error) {
 		return nil, errors.New("database is nil")
 	}
 	query, values := sqlQuery(
-		[]string{"besteffort"}, []string{"distinct(name)"}, conditions{},
+		[]string{bestEffortTable}, []string{"distinct(name)"}, conditions{},
 		&Order{OrderBy: []string{"distance desc"}},
 	)
 	// slog.Info("storage.Query", "query", query)
@@ -406,7 +402,7 @@ func (sq *Sqlite3) QuerySummary(fields []string, sumCond SummaryConditions, orde
 		Years: sumCond.Years, Month: sumCond.Month, Day: sumCond.Day,
 		Name: sumCond.Name, StravaID: sumCond.StravaID,
 	}
-	query, values := sqlQuery([]string{"summary"}, fields, genCond, order)
+	query, values := sqlQuery([]string{summaryTable}, fields, genCond, order)
 	// slog.Info("storage.QuerySummary", "query", query, "cond", sumCond, "values", values)
 	rows, err := sq.db.Query(query, values...)
 	if err != nil {
