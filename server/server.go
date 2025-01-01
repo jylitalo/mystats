@@ -44,20 +44,20 @@ func newTableData() TableData {
 }
 
 type Page struct {
-	Plot  *PlotPage
 	Best  *BestPage
 	List  *ListPage
-	Top   *TopPage
+	Plot  *PlotPage
 	Steps *StepsPage
+	Top   *TopPage
 }
 
 func newPage() *Page {
 	return &Page{
-		Plot:  newPlotPage(),
 		Best:  newBestPage(),
 		List:  newListPage(),
-		Top:   newTopPage(),
+		Plot:  newPlotPage(),
 		Steps: newStepsPage(),
+		Top:   newTopPage(),
 	}
 }
 
