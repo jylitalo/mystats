@@ -9,26 +9,31 @@
         <script src="https://unpkg.com/htmx.org/dist/htmx.min.js"></script>
     </head>
     <body>
+        {{ $best := "Best" -}}
+        {{ $list := "List" -}}
+        {{ $plot := "Plot" -}}
+        {{ $steps := "Steps" -}}
+        {{ $top := "Top" -}}
         <div class="tab">
-            <button class="tablinks" onclick="openTab(event, 'Plot')">Plot</button>
-            <button class="tablinks" onclick="openTab(event, 'Best')">Best Running Efforts</button>
-            <button class="tablinks" onclick="openTab(event, 'List')">List</button>
-            <button class="tablinks" onclick="openTab(event, 'Top')">Top</button>
-            <button class="tablinks" onclick="openTab(event, 'Steps')" id="defaultOpen">Steps</button>
+            <button class="tablinks" onclick="openTab(event, '{{ $plot }}')" id="defaultOpen">Plot</button>
+            <button class="tablinks" onclick="openTab(event, '{{ $best }}')">Best Running Efforts</button>
+            <button class="tablinks" onclick="openTab(event, '{{ $list }}')">List</button>
+            <button class="tablinks" onclick="openTab(event, '{{ $top }}')">Top</button>
+            <button class="tablinks" onclick="openTab(event, '{{ $steps }}')">Steps</button>
         </div>
-        <div id="Plot" class="tabcontent">
+        <div id="{{ $plot }}" class="tabcontent">
             {{ template "plot-tab" .Plot }}
         </div>
-        <div id="Best" class="tabcontent">
+        <div id="{{ $best }}" class="tabcontent">
             {{ template "best-tab" .Best }}
         </div>
-        <div id="List" class="tabcontent">
+        <div id="{{ $list }}" class="tabcontent">
             {{ template "list-tab" .List }}
         </div>
-        <div id="Top" class="tabcontent">
+        <div id="{{ $top }}" class="tabcontent">
             {{ template "top-tab" .Top }}
         </div>
-        <div id="Steps" class="tabcontent">
+        <div id="{{ $steps }}" class="tabcontent">
             {{ template "steps-tab" .Steps }}
         </div>
         <script>
