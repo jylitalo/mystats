@@ -52,18 +52,29 @@ type ListPage struct {
 	Event ListEventData
 }
 
-func newListPage(years []int, types, workouts map[string]bool) *ListPage {
+func newListPage(ctx context.Context, db Storage, years []int, sports, workouts map[string]bool) (*ListPage, error) {
+	var err error
+
+	form := newListFormData(years, sports, workouts)
+	data := newTableData()
+	data.Headers, data.Rows, err = stats.List(
+		ctx, db, selectedTypes(sports), selectedWorkoutTypes(workouts),
+		selectedYears(form.Years), form.Limit, "",
+	)
+	if err != nil {
+		return nil, err
+	}
 	return &ListPage{
-		Form: newListFormData(years, types, workouts),
-		Data: newTableData(),
+		Form: form,
+		Data: data,
 		Event: ListEventData{
 			Name:      "",
 			TableData: newTableData(),
 		},
-	}
+	}, err
 }
 
-func listPost(ctx context.Context, page *Page, db Storage) func(c echo.Context) error {
+func listPost(ctx context.Context, page *ListPage, db Storage) func(c echo.Context) error {
 	return func(c echo.Context) error {
 		var err error
 
@@ -81,15 +92,16 @@ func listPost(ctx context.Context, page *Page, db Storage) func(c echo.Context) 
 			_ = telemetry.Error(span, err)
 		}
 		slog.Info("POST /list", "values", values)
-		page.List.Form.Years = years
-		page.List.Data.Headers, page.List.Data.Rows, err = stats.List(
-			ctx, db, selectedTypes(types), selectedWorkoutTypes(workoutTypes), selectedYears(years), limit, name,
+		page.Form.Years = years
+		page.Data.Headers, page.Data.Rows, err = stats.List(
+			ctx, db, selectedTypes(types), selectedWorkoutTypes(workoutTypes),
+			selectedYears(years), limit, name,
 		)
-		return telemetry.Error(span, errors.Join(err, c.Render(200, "list-data", page.List.Data)))
+		return telemetry.Error(span, errors.Join(err, c.Render(200, "list-data", page.Data)))
 	}
 }
 
-func listEvent(ctx context.Context, page *Page, db Storage) func(c echo.Context) error {
+func listEvent(ctx context.Context, page *ListPage, db Storage) func(c echo.Context) error {
 	return func(c echo.Context) error {
 		ctx, span := telemetry.NewSpan(ctx, "eventPOST")
 		defer span.End()
@@ -111,11 +123,11 @@ func listEvent(ctx context.Context, page *Page, db Storage) func(c echo.Context)
 			return fmt.Errorf("listEvent was unable to find activity %d", id)
 		}
 		var year, month, day int
-		if err = rows.Scan(&page.List.Event.Name, &year, &month, &day); err != nil {
+		if err = rows.Scan(&page.Event.Name, &year, &month, &day); err != nil {
 			return telemetry.Error(span, err)
 		}
-		page.List.Event.Date = fmt.Sprintf("%d.%d.%d", day, month, year)
-		page.List.Event.Headers, page.List.Event.Rows, err = stats.Split(ctx, db, int64(id))
-		return errors.Join(err, c.Render(200, "list-event", page.List.Event))
+		page.Event.Date = fmt.Sprintf("%d.%d.%d", day, month, year)
+		page.Event.Headers, page.Event.Rows, err = stats.Split(ctx, db, int64(id))
+		return errors.Join(err, c.Render(200, "list-event", page.Event))
 	}
 }

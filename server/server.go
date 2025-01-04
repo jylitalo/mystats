@@ -16,7 +16,6 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 
-	"github.com/jylitalo/mystats/pkg/stats"
 	"github.com/jylitalo/mystats/pkg/telemetry"
 	"github.com/jylitalo/mystats/storage"
 )
@@ -73,17 +72,19 @@ func newPage(ctx context.Context, db Storage, selectedTypes []string) (*Page, er
 	dailyStepsYears, errD := db.QueryYears(storage.WithTable(storage.DailyStepsTable))
 	stravaYears, errS := db.QueryYears()
 	be, errBE := newBestPage(ctx, db)
+	list, errL := newListPage(ctx, db, stravaYears, maps.Clone(types), maps.Clone(selectedWT))
+	steps, errS := newStepsPage(ctx, db, dailyStepsYears)
 	top, errTop := newTopPage(
 		ctx, db, stravaYears, maps.Clone(types), maps.Clone(selectedWT),
 	)
-	if err := errors.Join(errW, errD, errS, errBE, errTop); err != nil {
+	if err := errors.Join(errW, errD, errS, errBE, errL, errS, errTop); err != nil {
 		return nil, err
 	}
 	return &Page{
 		Best:  be,
-		List:  newListPage(stravaYears, maps.Clone(types), maps.Clone(selectedWT)),
+		List:  list,
 		Plot:  newPlotPage(stravaYears, maps.Clone(types), maps.Clone(selectedWT)),
-		Steps: newStepsPage(dailyStepsYears),
+		Steps: steps,
 		Top:   top,
 	}, nil
 }
@@ -218,36 +219,25 @@ func Start(ctx context.Context, db Storage, selectedTypes []string, port int) er
 	if err != nil {
 		return err
 	}
-	e.GET("/", indexGet(ctx, page, db))
+	e.GET("/", indexGet(ctx, page.Plot, db))
 	e.POST("/best", bestPost(ctx, page.Best, db))
-	e.POST("/event", listEvent(ctx, page, db))
-	e.POST("/list", listPost(ctx, page, db))
-	e.POST("/plot", plotPost(ctx, page, db))
+	e.POST("/event", listEvent(ctx, page.List, db))
+	e.POST("/list", listPost(ctx, page.List, db))
+	e.POST("/plot", plotPost(ctx, page.Plot, db))
 	e.POST("/top", topPost(ctx, page.Top, db))
-	e.POST("/steps", stepsPost(ctx, page, db))
+	e.POST("/steps", stepsPost(ctx, page.Steps, db))
 	e.Logger.Fatal(e.Start(":" + strconv.FormatInt(int64(port), 10)))
 	return nil
 }
 
-func indexGet(ctx context.Context, page *Page, db Storage) func(c echo.Context) error {
+func indexGet(ctx context.Context, page *PlotPage, db Storage) func(c echo.Context) error {
 	return func(c echo.Context) error {
-		var errL, errT error
-
 		ctx, span := telemetry.NewSpan(ctx, "indexGET")
 		defer span.End()
-		pf := &page.Plot.Form
-		errP := page.Plot.render(
+		pf := &page.Form
+		err := page.render(
 			ctx, db, pf.Types, pf.WorkoutTypes, pf.EndMonth, pf.EndDay, pf.Years, pf.Period,
 		)
-		// init List tab
-		types := selectedTypes(pf.Types)
-		workoutTypes := selectedWorkoutTypes(pf.WorkoutTypes)
-		sp := &page.Steps.Form
-		errS := page.Steps.render(ctx, db, sp.EndMonth, sp.EndDay, sp.Years, sp.Period)
-		plfYears := selectedYears(page.List.Form.Years)
-		pld := &page.List.Data
-		pld.Headers, pld.Rows, errL = stats.List(ctx, db, types, workoutTypes, plfYears, page.List.Form.Limit, "")
-		// init Top tab
-		return telemetry.Error(span, errors.Join(errP, errL, errT, errS, c.Render(200, "index", page)))
+		return telemetry.Error(span, errors.Join(err, c.Render(200, "index", page)))
 	}
 }

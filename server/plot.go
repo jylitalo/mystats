@@ -167,16 +167,16 @@ func (p *PlotPage) render(
 
 type numbers map[int][]float64
 
-func plotPost(ctx context.Context, page *Page, db Storage) func(c echo.Context) error {
+func plotPost(ctx context.Context, page *PlotPage, db Storage) func(c echo.Context) error {
 	return func(c echo.Context) error {
 		_, span := telemetry.NewSpan(ctx, "plotPOST")
 		defer span.End()
 		month, errM := strconv.Atoi(c.FormValue("EndMonth"))
 		day, errD := strconv.Atoi(c.FormValue("EndDay"))
-		page.Plot.Form.Measure = c.FormValue("Measure")
-		page.Plot.Data.Measure = page.Plot.Form.Measure
-		page.Plot.Data.Period = c.FormValue("Period")
-		page.Plot.Form.Period = page.Plot.Data.Period
+		page.Form.Measure = c.FormValue("Measure")
+		page.Data.Measure = page.Form.Measure
+		page.Data.Period = c.FormValue("Period")
+		page.Form.Period = page.Data.Period
 		values, errV := c.FormParams()
 		types, errT := typeValues(values)
 		workoutTypes, errW := workoutTypeValues(values)
@@ -186,8 +186,8 @@ func plotPost(ctx context.Context, page *Page, db Storage) func(c echo.Context) 
 		}
 		slog.Info("POST /plot", "values", values)
 		return telemetry.Error(span, errors.Join(
-			page.Plot.render(ctx, db, types, workoutTypes, month, day, years, page.Plot.Data.Period),
-			c.Render(200, "plot-data", page.Plot.Data),
+			page.render(ctx, db, types, workoutTypes, month, day, years, page.Data.Period),
+			c.Render(200, "plot-data", page.Data),
 		))
 	}
 }

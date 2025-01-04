@@ -129,11 +129,11 @@ type StepsPage struct {
 	Form StepsFormData
 }
 
-func newStepsPage(years []int) *StepsPage {
-	return &StepsPage{
-		Data: newStepsData(),
-		Form: newStepsFormData(years),
-	}
+func newStepsPage(ctx context.Context, db Storage, years []int) (*StepsPage, error) {
+	form := newStepsFormData(years)
+	data := newStepsData()
+	page := &StepsPage{Data: data, Form: form}
+	return page, page.render(ctx, db, form.EndMonth, form.EndDay, form.Years, form.Period)
 }
 
 func (p *StepsPage) render(
@@ -203,14 +203,14 @@ func (p *StepsPage) render(
 	return err
 }
 
-func stepsPost(ctx context.Context, page *Page, db Storage) func(c echo.Context) error {
+func stepsPost(ctx context.Context, page *StepsPage, db Storage) func(c echo.Context) error {
 	return func(c echo.Context) error {
 		_, span := telemetry.NewSpan(ctx, "stepsPOST")
 		defer span.End()
 		month, errM := strconv.Atoi(c.FormValue("EndMonth"))
 		day, errD := strconv.Atoi(c.FormValue("EndDay"))
-		page.Steps.Data.Period = c.FormValue("Period")
-		page.Steps.Form.Period = page.Steps.Data.Period
+		page.Data.Period = c.FormValue("Period")
+		page.Form.Period = page.Data.Period
 		values, errV := c.FormParams()
 		years, errY := yearValues(values)
 		if err := errors.Join(errM, errD, errV, errY); err != nil {
@@ -218,8 +218,8 @@ func stepsPost(ctx context.Context, page *Page, db Storage) func(c echo.Context)
 		}
 		slog.Info("POST /steps", "values", values)
 		return telemetry.Error(span, errors.Join(
-			page.Steps.render(ctx, db, month, day, years, page.Steps.Data.Period),
-			c.Render(200, "steps-data", page.Steps.Data),
+			page.render(ctx, db, month, day, years, page.Data.Period),
+			c.Render(200, "steps-data", page.Data),
 		))
 	}
 }
