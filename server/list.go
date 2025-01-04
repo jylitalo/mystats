@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strconv"
+	"time"
 
 	"github.com/jylitalo/mystats/pkg/stats"
 	"github.com/jylitalo/mystats/pkg/telemetry"
@@ -21,12 +22,20 @@ type ListFormData struct {
 	Limit        int
 }
 
-func newListFormData() ListFormData {
+func newListFormData(years []int, types, workouts map[string]bool) ListFormData {
+	yearSelection := map[int]bool{}
+	currentYear := time.Now().Year()
+	for _, y := range years {
+		yearSelection[y] = false
+	}
+	if _, ok := yearSelection[currentYear]; ok {
+		yearSelection[currentYear] = true
+	}
 	return ListFormData{
 		Name:         "list",
-		Types:        map[string]bool{},
-		WorkoutTypes: map[string]bool{},
-		Years:        map[int]bool{},
+		Types:        types,
+		WorkoutTypes: workouts,
+		Years:        yearSelection,
 		Limit:        1000,
 	}
 }
@@ -43,9 +52,9 @@ type ListPage struct {
 	Event ListEventData
 }
 
-func newListPage() *ListPage {
+func newListPage(years []int, types, workouts map[string]bool) *ListPage {
 	return &ListPage{
-		Form: newListFormData(),
+		Form: newListFormData(years, types, workouts),
 		Data: newTableData(),
 		Event: ListEventData{
 			Name:      "",
@@ -89,7 +98,11 @@ func listEvent(ctx context.Context, page *Page, db Storage) func(c echo.Context)
 		if err != nil {
 			return telemetry.Error(span, err)
 		}
-		rows, err := db.QuerySummary([]string{"name", "year", "month", "day"}, storage.SummaryConditions{StravaID: int64(id)}, nil)
+		rows, err := db.Query(
+			[]string{"name", "year", "month", "day"},
+			storage.WithTable(storage.SummaryTable),
+			storage.WithStravaID(int64(id)),
+		)
 		if err != nil {
 			return telemetry.Error(span, err)
 		}

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
+	"log"
 	"log/slog"
 	"slices"
 	"strconv"
@@ -33,7 +34,11 @@ type PlotFormData struct {
 	Years          map[int]bool
 }
 
-func newPlotFormData() PlotFormData {
+func newPlotFormData(years []int, types, workouts map[string]bool) PlotFormData {
+	yearSelection := map[int]bool{}
+	for _, y := range years {
+		yearSelection[y] = true
+	}
 	t := time.Now()
 	return PlotFormData{
 		Name:           "plot",
@@ -43,9 +48,9 @@ func newPlotFormData() PlotFormData {
 		MeasureOptions: []string{"distance", "elevation", "time"},
 		Period:         "month",
 		PeriodOptions:  []string{"month", "week"},
-		Types:          map[string]bool{},
-		WorkoutTypes:   map[string]bool{},
-		Years:          map[int]bool{},
+		Types:          types,
+		WorkoutTypes:   workouts,
+		Years:          yearSelection,
 	}
 }
 
@@ -77,10 +82,10 @@ type PlotPage struct {
 	Form PlotFormData
 }
 
-func newPlotPage() *PlotPage {
+func newPlotPage(years []int, types, workouts map[string]bool) *PlotPage {
 	return &PlotPage{
 		Data: newPlotData(),
-		Form: newPlotFormData(),
+		Form: newPlotFormData(years, types, workouts),
 	}
 }
 
@@ -104,7 +109,6 @@ func (p *PlotPage) render(
 		"#00f000",
 		"#0000f0",
 	}
-
 	p.Form.EndMonth = month
 	p.Form.EndDay = day
 	p.Form.Years = years
@@ -191,58 +195,73 @@ func plotPost(ctx context.Context, page *Page, db Storage) func(c echo.Context) 
 func scan(rows *sql.Rows, years []int) (numbers, error) {
 	tz, _ := time.LoadLocation("Europe/Helsinki")
 	day1 := map[int]time.Time{}
+	// ys is map, where key is year and array has entry for each day of the year
 	ys := map[int][]float64{}
 	for _, year := range years {
 		day1[year] = time.Date(year, time.January, 1, 6, 0, 0, 0, tz)
 		ys[year] = []float64{}
 	}
-	xmax := 0
+	max_acts := 0
 	if rows == nil {
 		return ys, nil
 	}
-	for rows.Next() {
+	for rows.Next() { // scan through database rows
 		var year, month, day int
 		var value float64
 		if err := rows.Scan(&year, &month, &day, &value); err != nil {
 			return ys, err
 		}
-		now := time.Date(year, time.Month(month), day, 6, 0, 0, 0, tz)
-		days := int(now.Sub(day1[year]).Hours() / 24)
+		now := time.Date(year, time.Month(month), day, 6, 0, 0, 0, tz) // time when activity happened
+		days := int(now.Sub(day1[year]).Hours()/24) + 1                // day within a year (1-365)
+		if days > 366 {
+			log.Fatalf("days got impossible number %d (year=%d, month=%d, day=%d, now=%#v, day1=%#v)", days, year, month, day, now, day1[year])
+		}
 		yslen := len(ys[year])
-		y := float64(0)
+		previous_y := float64(0)
 		if yslen > 0 {
-			y = ys[year][yslen-1]
+			previous_y = ys[year][yslen-1]
 		}
-		for x := yslen; x < days-1; x++ {
-			ys[year] = append(ys[year], y)
+		for x := yslen; x < days-1; x++ { // fill the gaps on days that didn't have activities
+			ys[year] = append(ys[year], previous_y)
 		}
-		xmax = max(xmax, days)
-		ys[year] = append(ys[year], y+value)
+		max_acts = max(max_acts, days)
+		ys[year] = append(ys[year], previous_y+value)
 	}
-	for _, year := range years {
+	for _, year := range years { // fill the end of year
 		yslen := len(ys[year])
-		y := float64(0)
+		previous_y := float64(0)
 		if yslen > 0 {
-			y = ys[year][yslen-1]
+			previous_y = ys[year][yslen-1]
 		}
-		for x := yslen; x < xmax; x++ {
-			ys[year] = append(ys[year], y)
+		for x := yslen; x < max_acts; x++ {
+			ys[year] = append(ys[year], previous_y)
 		}
 	}
 	return ys, nil
 }
 
 func getNumbers(
-	ctx context.Context, db Storage, types, workoutTypes []string, measure string,
+	ctx context.Context, db Storage, sports, workouts []string, measure string,
 	month, day int, years []int,
 ) (numbers, error) {
-	cond := storage.SummaryConditions{
-		Types: types, WorkoutTypes: workoutTypes, Month: month, Day: day, Years: years,
-	}
 	_, span := telemetry.NewSpan(ctx, "server.getNumbers")
 	defer span.End()
-
-	years, err := db.QueryYears(cond)
+	o := []string{"year", "month", "day"}
+	opts := []storage.QueryOption{
+		storage.WithTable(storage.SummaryTable),
+		storage.WithDayOfYear(day, month),
+		storage.WithOrder(storage.OrderConfig{GroupBy: o, OrderBy: o}),
+	}
+	for _, s := range sports {
+		opts = append(opts, storage.WithSport(s))
+	}
+	for _, w := range workouts {
+		opts = append(opts, storage.WithWorkout(w))
+	}
+	for _, y := range years {
+		opts = append(opts, storage.WithYear(y))
+	}
+	years, err := db.QueryYears(opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -255,8 +274,7 @@ func getNumbers(
 	case "elevation":
 		m = "sum(elevation)"
 	}
-	o := []string{"year", "month", "day"}
-	rows, err := db.QuerySummary(append(o, m), cond, &storage.Order{GroupBy: o, OrderBy: o})
+	rows, err := db.Query(append(o, m), opts...)
 	if err != nil {
 		return nil, fmt.Errorf("select caused: %w", err)
 	}

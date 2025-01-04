@@ -27,7 +27,11 @@ type StepsFormData struct {
 	Years         map[int]bool
 }
 
-func newStepsFormData() StepsFormData {
+func newStepsFormData(years []int) StepsFormData {
+	yearSelection := map[int]bool{}
+	for _, y := range years {
+		yearSelection[y] = true
+	}
 	t := time.Now()
 	return StepsFormData{
 		Name:          "steps",
@@ -35,7 +39,7 @@ func newStepsFormData() StepsFormData {
 		EndDay:        t.Day(),
 		Period:        "month",
 		PeriodOptions: []string{"month", "week"},
-		Years:         map[int]bool{},
+		Years:         yearSelection,
 	}
 }
 
@@ -57,7 +61,15 @@ func stepsStats(
 ) ([]int, [][]string, []string, error) {
 	_, span := telemetry.NewSpan(ctx, "server.stepsStats")
 	defer span.End()
-
+	o := []string{period, "year"}
+	opts := []storage.QueryOption{
+		storage.WithTable(storage.DailyStepsTable),
+		storage.WithDayOfYear(day, month),
+		storage.WithOrder(storage.OrderConfig{GroupBy: o, OrderBy: o}),
+	}
+	for _, y := range years {
+		opts = append(opts, storage.WithYear(y))
+	}
 	inYear := map[string]int{
 		"month": 12,
 		"week":  53,
@@ -65,9 +77,8 @@ func stepsStats(
 	if _, ok := inYear[period]; !ok {
 		return nil, nil, nil, telemetry.Error(span, fmt.Errorf("unknown period: %s", period))
 	}
-	cond := storage.SummaryConditions{Month: month, Day: day, Years: years}
 	results := make([][]string, inYear[period])
-	years, err := db.QueryYears(cond)
+	years, err := db.QueryYears(opts...)
 	if err != nil {
 		return nil, nil, nil, telemetry.Error(span, err)
 	}
@@ -82,10 +93,7 @@ func stepsStats(
 			results[idx][year] = "    "
 		}
 	}
-	rows, err := db.QuerySteps(
-		[]string{"year", period, "sum(totalsteps)"}, cond,
-		&storage.Order{GroupBy: []string{period, "year"}, OrderBy: []string{period, "year"}},
-	)
+	rows, err := db.Query([]string{"year", period, "sum(totalsteps)"}, opts...)
 	if err != nil {
 		return nil, nil, nil, telemetry.Error(span, fmt.Errorf("select caused: %w", err))
 	}
@@ -121,10 +129,10 @@ type StepsPage struct {
 	Form StepsFormData
 }
 
-func newStepsPage() *StepsPage {
+func newStepsPage(years []int) *StepsPage {
 	return &StepsPage{
 		Data: newStepsData(),
-		Form: newStepsFormData(),
+		Form: newStepsFormData(years),
 	}
 }
 
@@ -217,16 +225,23 @@ func stepsPost(ctx context.Context, page *Page, db Storage) func(c echo.Context)
 }
 
 func getSteps(ctx context.Context, db Storage, month, day int, years []int) (numbers, error) {
-	cond := storage.SummaryConditions{Month: month, Day: day, Years: years}
 	_, span := telemetry.NewSpan(ctx, "server.getSteps")
 	defer span.End()
 
-	years, err := db.QueryYears(cond)
+	o := []string{"year", "month", "day"}
+	opts := []storage.QueryOption{
+		storage.WithDayOfYear(day, month),
+		storage.WithTable(storage.DailyStepsTable),
+		storage.WithOrder(storage.OrderConfig{GroupBy: o, OrderBy: o}),
+	}
+	for _, y := range years {
+		opts = append(opts, storage.WithYear(y))
+	}
+	years, err := db.QueryYears(opts...)
 	if err != nil {
 		return nil, err
 	}
-	o := []string{"year", "month", "day"}
-	rows, err := db.QuerySteps(append(o, "TotalSteps"), cond, &storage.Order{GroupBy: o, OrderBy: o})
+	rows, err := db.Query(append(o, "TotalSteps"), opts...)
 	if err != nil {
 		return nil, fmt.Errorf("select caused: %w", err)
 	}

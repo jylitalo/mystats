@@ -19,14 +19,11 @@ import (
 )
 
 type Storage interface {
-	QueryBestEffort(fields []string, name string, order *storage.Order) (*sql.Rows, error)
 	QueryBestEffortDistances() ([]string, error)
-	QuerySplit(fields []string, id int64) (*sql.Rows, error)
-	QuerySteps(fields []string, cond storage.SummaryConditions, order *storage.Order) (*sql.Rows, error)
-	QuerySummary(fields []string, cond storage.SummaryConditions, order *storage.Order) (*sql.Rows, error)
-	QueryTypes(cond storage.SummaryConditions) ([]string, error)
-	QueryWorkoutTypes(cond storage.SummaryConditions) ([]string, error)
-	QueryYears(cond storage.SummaryConditions) ([]int, error)
+	QuerySports() ([]string, error)
+	QueryWorkouts() ([]string, error)
+	QueryYears(opts ...storage.QueryOption) ([]int, error)
+	Query(fields []string, opts ...storage.QueryOption) (*sql.Rows, error)
 	Close() error
 }
 
