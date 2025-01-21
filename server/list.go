@@ -15,14 +15,14 @@ import (
 )
 
 type ListFormData struct {
-	Name         string
-	Types        map[string]bool
-	WorkoutTypes map[string]bool
-	Years        map[int]bool
-	Limit        int
+	Name     string
+	Sports   map[string]bool
+	Workouts map[string]bool
+	Years    map[int]bool
+	Limit    int
 }
 
-func newListFormData(years []int, types, workouts map[string]bool) ListFormData {
+func newListFormData(years []int, sports, workouts map[string]bool) ListFormData {
 	yearSelection := map[int]bool{}
 	currentYear := time.Now().Year()
 	for _, y := range years {
@@ -32,11 +32,11 @@ func newListFormData(years []int, types, workouts map[string]bool) ListFormData 
 		yearSelection[currentYear] = true
 	}
 	return ListFormData{
-		Name:         "list",
-		Types:        types,
-		WorkoutTypes: workouts,
-		Years:        yearSelection,
-		Limit:        1000,
+		Name:     "list",
+		Sports:   sports,
+		Workouts: workouts,
+		Years:    yearSelection,
+		Limit:    1000,
 	}
 }
 
@@ -46,19 +46,22 @@ type ListEventData struct {
 	TableData
 }
 
+type listStatsFn func(ctx context.Context, db stats.Storage, sports, workouts []string, years []int, limit int, name string) ([]string, [][]string, error)
+
 type ListPage struct {
 	Form  ListFormData
 	Data  TableData
 	Event ListEventData
+	stats listStatsFn
 }
 
-func newListPage(ctx context.Context, db Storage, years []int, sports, workouts map[string]bool) (*ListPage, error) {
+func newListPage(ctx context.Context, db Storage, years []int, sports, workouts map[string]bool, stats listStatsFn) (*ListPage, error) {
 	var err error
 
 	form := newListFormData(years, sports, workouts)
 	data := newTableData()
-	data.Headers, data.Rows, err = stats.List(
-		ctx, db, selectedTypes(sports), selectedWorkoutTypes(workouts),
+	data.Headers, data.Rows, err = stats(
+		ctx, db, selectedSports(sports), selectedWorkouts(workouts),
 		selectedYears(form.Years), form.Limit, "",
 	)
 	if err != nil {
@@ -71,6 +74,7 @@ func newListPage(ctx context.Context, db Storage, years []int, sports, workouts 
 			Name:      "",
 			TableData: newTableData(),
 		},
+		stats: stats,
 	}, err
 }
 
@@ -82,8 +86,8 @@ func listPost(ctx context.Context, page *ListPage, db Storage) func(c echo.Conte
 		defer span.End()
 
 		values, errV := c.FormParams()
-		types, errT := typeValues(values)
-		workoutTypes, errW := workoutTypeValues(values)
+		sports, errT := sportsValues(values)
+		workouts, errW := workoutsValues(values)
 		years, errY := yearValues(values)
 		limit, errL := strconv.Atoi(c.FormValue("limit"))
 		name := c.FormValue("name")
@@ -93,8 +97,8 @@ func listPost(ctx context.Context, page *ListPage, db Storage) func(c echo.Conte
 		}
 		slog.Info("POST /list", "values", values)
 		page.Form.Years = years
-		page.Data.Headers, page.Data.Rows, err = stats.List(
-			ctx, db, selectedTypes(types), selectedWorkoutTypes(workoutTypes),
+		page.Data.Headers, page.Data.Rows, err = page.stats(
+			ctx, db, selectedSports(sports), selectedWorkouts(workouts),
 			selectedYears(years), limit, name,
 		)
 		return telemetry.Error(span, errors.Join(err, c.Render(200, "list-data", page.Data)))

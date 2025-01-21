@@ -7,19 +7,25 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <link media="all" rel="stylesheet" href="/css/index.css" />
         <script src="https://unpkg.com/htmx.org/dist/htmx.min.js"></script>
+        <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
     </head>
     <body>
+        <script type="text/javascript">
+            google.charts.load('current', {'packages':['corechart', 'line']});
+        </script>
         {{ $best := "Best" -}}
+        {{ $hr := "HR" -}}
         {{ $list := "List" -}}
         {{ $plot := "Plot" -}}
         {{ $steps := "Steps" -}}
         {{ $top := "Top" -}}
         <div class="tab">
             <button class="tablinks" onclick="openTab(event, '{{ $plot }}')" id="defaultOpen">Plot</button>
-            <button class="tablinks" onclick="openTab(event, '{{ $best }}')">Best Running Efforts</button>
+            <button class="tablinks" onclick="openTab(event, '{{ $best }}')">Strava's Running PBs</button>
             <button class="tablinks" onclick="openTab(event, '{{ $list }}')">List</button>
             <button class="tablinks" onclick="openTab(event, '{{ $top }}')">Top</button>
             <button class="tablinks" onclick="openTab(event, '{{ $steps }}')">Steps</button>
+            <button class="tablinks" onclick="openTab(event, '{{ $hr }}')">Resting HR</button>
         </div>
         <div id="{{ $plot }}" class="tabcontent">
             {{ template "plot-tab" .Plot }}
@@ -35,6 +41,9 @@
         </div>
         <div id="{{ $steps }}" class="tabcontent">
             {{ template "steps-tab" .Steps }}
+        </div>
+        <div id="{{ $hr }}" class="tabcontent">
+            {{ template "heartrate-tab" .HeartRate }}
         </div>
         <script>
             function openTab(evt, tabName) {
@@ -64,21 +73,21 @@
 {{ end }}
 
 
-{{ block "types" . }}
+{{ block "sports" . }}
 {{ $name := .Name }}
-<div id="types">
+<div id="sports">
     <b>Types:</b>
-    {{ range $t, $v := .Types -}}
-        <input type="checkbox" name="type_{{ esc $t }}"{{ if $v }} checked{{ end }} hx-swap="outerHTML" hx-target="#{{ $name }}-data" hx-post="/{{ $name }}"><label>{{ $t }}</label>
+    {{ range $t, $v := .Sports -}}
+        <input type="checkbox" name="sport_{{ esc $t }}"{{ if $v }} checked{{ end }} hx-swap="outerHTML" hx-target="#{{ $name }}-data" hx-post="/{{ $name }}"><label>{{ $t }}</label>
     {{ end }}
 </div>
 {{ end }}
 
-{{ block "workouttypes" . }}
+{{ block "workouts" . }}
 {{ $name := .Name }}
-<div id="workouttypes">
+<div id="workouts">
     <b>Workout:</b>
-    {{ range $t, $v := .WorkoutTypes -}}
+    {{ range $t, $v := .Workouts -}}
         <input type="checkbox" name="wt_{{ esc $t }}"{{ if $v }} checked{{ end }} hx-swap="outerHTML" hx-target="#{{ $name }}-data" hx-post="/{{ $name }}"><label>{{ $t }}</label>
     {{ end }}
 </div>

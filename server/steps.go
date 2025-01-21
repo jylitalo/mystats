@@ -43,6 +43,10 @@ func newStepsFormData(years []int) StepsFormData {
 	}
 }
 
+type stepStatsFn func(
+	ctx context.Context, db Storage, period string, month, day int, years []int,
+) ([]int, [][]string, []string, error)
+
 type StepsData struct {
 	Years         []int
 	Stats         [][]string
@@ -51,9 +55,7 @@ type StepsData struct {
 	ScriptRows    template.JS
 	ScriptColors  template.JS
 	Period        string
-	stats         func(
-		ctx context.Context, db Storage, period string, month, day int, years []int,
-	) ([]int, [][]string, []string, error)
+	stats         stepStatsFn
 }
 
 func stepsStats(
@@ -117,10 +119,10 @@ func stepsStats(
 	return years, results, totals, nil
 }
 
-func newStepsData() StepsData {
+func newStepsData(stats stepStatsFn, period string) StepsData {
 	return StepsData{
-		Period: "month",
-		stats:  stepsStats,
+		Period: period,
+		stats:  stats,
 	}
 }
 
@@ -129,9 +131,9 @@ type StepsPage struct {
 	Form StepsFormData
 }
 
-func newStepsPage(ctx context.Context, db Storage, years []int) (*StepsPage, error) {
+func newStepsPage(ctx context.Context, db Storage, years []int, stats stepStatsFn) (*StepsPage, error) {
 	form := newStepsFormData(years)
-	data := newStepsData()
+	data := newStepsData(stats, form.Period)
 	page := &StepsPage{Data: data, Form: form}
 	return page, page.render(ctx, db, form.EndMonth, form.EndDay, form.Years, form.Period)
 }
@@ -196,11 +198,14 @@ func (p *StepsPage) render(
 	p.Data.ScriptColumns = foundYears
 	p.Data.ScriptRows = template.JS(strings.ReplaceAll(string(byteRows), `"`, ``)) // #nosec G203
 	p.Data.ScriptColors = template.JS(byteColors)                                  // #nosec G203
+	if d.stats == nil {
+		return errors.New("stats is nil in StepsPage.render")
+	}
 	d.Years, d.Stats, d.Totals, err = d.stats(ctx, db, period, month, day, foundYears)
 	if err != nil {
-		slog.Error("failed to calculate stats", "err", err)
+		return fmt.Errorf("failed to calculate stats: %w", err)
 	}
-	return err
+	return nil
 }
 
 func stepsPost(ctx context.Context, page *StepsPage, db Storage) func(c echo.Context) error {
@@ -252,5 +257,5 @@ func getSteps(ctx context.Context, db Storage, month, day int, years []int) (num
 			}
 		}
 	}()
-	return scan(rows, years)
+	return cumulativeScan(rows, years)
 }

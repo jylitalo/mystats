@@ -44,22 +44,28 @@ func newBestFormData(ctx context.Context, db Storage) (*BestFormData, error) {
 	}, nil
 }
 
+type bestStatsFn func(ctx context.Context, db stats.Storage, distance string, limit int) ([]string, [][]string, error)
+
 type BestData struct {
-	Data []TableData
+	Data  []TableData
+	stats bestStatsFn
 }
 
-func newBestData(ctx context.Context, db Storage, selected []string, limit int) (*BestData, error) {
+func newBestData(ctx context.Context, db Storage, selected []string, limit int, stats bestStatsFn) (*BestData, error) {
 	ctx, span := telemetry.NewSpan(ctx, "server.newBestData")
 	defer span.End()
 	data := []TableData{}
+	if stats == nil {
+		panic("stats is nil in server.newBestData()")
+	}
 	for _, distance := range selected {
-		if headers, rows, err := stats.Best(ctx, db, distance, limit); err != nil {
+		if headers, rows, err := stats(ctx, db, distance, limit); err != nil {
 			return nil, telemetry.Error(span, err)
 		} else {
 			data = append(data, TableData{Headers: headers, Rows: rows})
 		}
 	}
-	return &BestData{Data: data}, nil
+	return &BestData{Data: data, stats: stats}, nil
 }
 
 type BestPage struct {
@@ -67,12 +73,12 @@ type BestPage struct {
 	Data *BestData
 }
 
-func newBestPage(ctx context.Context, db Storage) (*BestPage, error) {
+func newBestPage(ctx context.Context, db Storage, stats bestStatsFn) (*BestPage, error) {
 	form, err := newBestFormData(ctx, db)
 	if err != nil {
 		return nil, err
 	}
-	data, err := newBestData(ctx, db, selectedBestEfforts(form.Distances), form.Limit)
+	data, err := newBestData(ctx, db, selectedBestEfforts(form.Distances), form.Limit, stats)
 	if err != nil {
 		return nil, err
 	}
@@ -125,7 +131,7 @@ func bestPost(ctx context.Context, page *BestPage, db Storage) func(c echo.Conte
 			if !slices.Contains[[]string, string](selected, distance) {
 				continue
 			}
-			if headers, rows, err := stats.Best(ctx, db, distance, page.Form.Limit); err != nil {
+			if headers, rows, err := page.Data.stats(ctx, db, distance, page.Form.Limit); err != nil {
 				return telemetry.Error(span, err)
 			} else {
 				page.Data.Data = append(page.Data.Data, TableData{

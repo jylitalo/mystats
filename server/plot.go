@@ -29,12 +29,12 @@ type PlotFormData struct {
 	MeasureOptions []string
 	Period         string
 	PeriodOptions  []string
-	Types          map[string]bool
-	WorkoutTypes   map[string]bool
+	Sports         map[string]bool
+	Workouts       map[string]bool
 	Years          map[int]bool
 }
 
-func newPlotFormData(years []int, types, workouts map[string]bool) PlotFormData {
+func newPlotFormData(years []int, sports, workouts map[string]bool) PlotFormData {
 	yearSelection := map[int]bool{}
 	for _, y := range years {
 		yearSelection[y] = true
@@ -48,11 +48,16 @@ func newPlotFormData(years []int, types, workouts map[string]bool) PlotFormData 
 		MeasureOptions: []string{"distance", "elevation", "time"},
 		Period:         "month",
 		PeriodOptions:  []string{"month", "week"},
-		Types:          types,
-		WorkoutTypes:   workouts,
+		Sports:         sports,
+		Workouts:       workouts,
 		Years:          yearSelection,
 	}
 }
+
+type plotStatsFn func(
+	ctx context.Context, db stats.Storage, measure, period string, sports, workouts []string,
+	month, day int, years []int,
+) ([]int, [][]string, []string, error)
 
 type PlotData struct {
 	Years         []int
@@ -63,17 +68,14 @@ type PlotData struct {
 	ScriptRows    template.JS
 	ScriptColors  template.JS
 	Period        string
-	stats         func(
-		ctx context.Context, db stats.Storage, measure, period string, types, workoutTypes []string,
-		month, day int, years []int,
-	) ([]int, [][]string, []string, error)
+	stats         plotStatsFn
 }
 
-func newPlotData() PlotData {
+func newPlotData(stats plotStatsFn, period string) PlotData {
 	return PlotData{
 		Measure: "distance",
-		Period:  "month",
-		stats:   stats.Stats,
+		Period:  period,
+		stats:   stats,
 	}
 }
 
@@ -82,15 +84,17 @@ type PlotPage struct {
 	Form PlotFormData
 }
 
-func newPlotPage(years []int, types, workouts map[string]bool) *PlotPage {
-	return &PlotPage{
-		Data: newPlotData(),
-		Form: newPlotFormData(years, types, workouts),
+func newPlotPage(ctx context.Context, db Storage, years []int, sports, workouts map[string]bool, stats plotStatsFn) (*PlotPage, error) {
+	form := newPlotFormData(years, sports, workouts)
+	page := &PlotPage{
+		Form: form,
+		Data: newPlotData(stats, form.Period),
 	}
+	return page, page.render(ctx, db, sports, workouts, form.EndMonth, form.EndDay, form.Years, form.Period)
 }
 
 func (p *PlotPage) render(
-	ctx context.Context, db Storage, types, workoutTypes map[string]bool, month, day int,
+	ctx context.Context, db Storage, sports, workouts map[string]bool, month, day int,
 	years map[int]bool, period string,
 ) error {
 	ctx, span := telemetry.NewSpan(ctx, "plot.render")
@@ -112,11 +116,11 @@ func (p *PlotPage) render(
 	p.Form.EndMonth = month
 	p.Form.EndDay = day
 	p.Form.Years = years
-	checkedTypes := selectedTypes(types)
-	checkedWorkoutTypes := selectedWorkoutTypes(workoutTypes)
+	checkedSports := selectedSports(sports)
+	checkedWorkouts := selectedWorkouts(workouts)
 	checkedYears := selectedYears(years)
 	d := &p.Data
-	numbers, err := getNumbers(ctx, db, checkedTypes, checkedWorkoutTypes, d.Measure, month, day, checkedYears)
+	numbers, err := getNumbers(ctx, db, checkedSports, checkedWorkouts, d.Measure, month, day, checkedYears)
 	if err != nil {
 		slog.Error("failed to plot", "err", err)
 		return err
@@ -156,7 +160,7 @@ func (p *PlotPage) render(
 		measure = "elapsedtime"
 	}
 	d.Years, d.Stats, d.Totals, err = d.stats(
-		ctx, db, "sum("+measure+")", period, checkedTypes, checkedWorkoutTypes,
+		ctx, db, "sum("+measure+")", period, checkedSports, checkedWorkouts,
 		month, day, foundYears,
 	)
 	if err != nil {
@@ -178,21 +182,21 @@ func plotPost(ctx context.Context, page *PlotPage, db Storage) func(c echo.Conte
 		page.Data.Period = c.FormValue("Period")
 		page.Form.Period = page.Data.Period
 		values, errV := c.FormParams()
-		types, errT := typeValues(values)
-		workoutTypes, errW := workoutTypeValues(values)
+		sports, errS := sportsValues(values)
+		workouts, errW := workoutsValues(values)
 		years, errY := yearValues(values)
-		if err := errors.Join(errM, errD, errV, errT, errW, errY); err != nil {
+		if err := errors.Join(errM, errD, errV, errS, errW, errY); err != nil {
 			return telemetry.Error(span, err)
 		}
 		slog.Info("POST /plot", "values", values)
 		return telemetry.Error(span, errors.Join(
-			page.render(ctx, db, types, workoutTypes, month, day, years, page.Data.Period),
+			page.render(ctx, db, sports, workouts, month, day, years, page.Data.Period),
 			c.Render(200, "plot-data", page.Data),
 		))
 	}
 }
 
-func scan(rows *sql.Rows, years []int) (numbers, error) {
+func cumulativeScan(rows *sql.Rows, years []int) (numbers, error) {
 	tz, _ := time.LoadLocation("Europe/Helsinki")
 	day1 := map[int]time.Time{}
 	// ys is map, where key is year and array has entry for each day of the year
@@ -285,5 +289,5 @@ func getNumbers(
 			}
 		}
 	}()
-	return scan(rows, years)
+	return cumulativeScan(rows, years)
 }

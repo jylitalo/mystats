@@ -34,7 +34,7 @@ func List(ctx context.Context, db Storage, sports, workouts []string, years []in
 			"Type", "Workouttype", "StravaID",
 		}, opts...,
 	)
-	if err != nil {
+	if rows == nil || err != nil {
 		return nil, nil, telemetry.Error(span, fmt.Errorf("query caused: %w", err))
 	}
 	defer rows.Close()
@@ -55,7 +55,11 @@ func List(ctx context.Context, db Storage, sports, workouts []string, years []in
 			typeName, workoutType, fmt.Sprintf("https://strava.com/activities/%d", stravaID),
 		})
 	}
-	return []string{"ID", "Date", "Name", "Distance (km)", "Elevation (m)", "Time", "Type", "Workout Type", "Link"}, results, nil
+	return []string{
+			"ID", "Date", "Name", "Distance (km)", "Elevation (m)", "Time",
+			"Type", "Workout Type", "Link",
+		},
+		results, nil
 }
 
 func Split(ctx context.Context, db Storage, id int64) ([]string, [][]string, error) {

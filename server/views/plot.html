@@ -42,8 +42,8 @@
             {{ end }}
         </select>
     </div>
-    {{ template "types" . }}
-    {{ template "workouttypes" . }}
+    {{ template "sports" . }}
+    {{ template "workouts" . }}
     {{ template "years" . }}
 </form>
 {{ end }}
@@ -58,11 +58,9 @@
 
 {{ block "plot-plot" . }}
 <div id="plot" style="display: flex; flex-direction: column">
-    <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
     <script type="text/javascript">
-        google.charts.load('current', {'packages':['corechart', 'line']});
-        google.charts.setOnLoadCallback(drawLineColors);
-        function drawLineColors() {
+        google.charts.setOnLoadCallback(plotDrawLineColors);
+        function plotDrawLineColors() {
             var data = new google.visualization.DataTable();
             var options = {
                 height: 750,

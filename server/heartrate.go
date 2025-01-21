@@ -1,0 +1,247 @@
+package server
+
+import (
+	"context"
+	"database/sql"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"html/template"
+	"log"
+	"log/slog"
+	"slices"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/labstack/echo/v4"
+
+	"github.com/jylitalo/mystats/pkg/telemetry"
+	"github.com/jylitalo/mystats/storage"
+)
+
+type HeartRateFormData struct {
+	Name     string
+	EndMonth int
+	EndDay   int
+	Average  int
+	Years    map[int]bool
+}
+
+func newHeartRateFormData(years []int) HeartRateFormData {
+	yearSelection := map[int]bool{}
+	for _, y := range years {
+		yearSelection[y] = true
+	}
+	t := time.Now()
+	return HeartRateFormData{
+		Name:     "heartrate",
+		EndMonth: int(t.Month()),
+		EndDay:   t.Day(),
+		Years:    yearSelection,
+	}
+}
+
+type HeartRateData struct {
+	Years         []int
+	Stats         [][]string
+	ScriptColumns []int
+	ScriptRows    template.JS
+	ScriptColors  template.JS
+}
+
+func newHeartRateData() HeartRateData {
+	return HeartRateData{}
+}
+
+type HeartRatePage struct {
+	Data HeartRateData
+	Form HeartRateFormData
+}
+
+func newHeartRatePage(ctx context.Context, db Storage, years []int) (*HeartRatePage, error) {
+	form := newHeartRateFormData(years)
+	data := newHeartRateData()
+	page := &HeartRatePage{Data: data, Form: form}
+	return page, page.render(ctx, db, form.EndMonth, form.EndDay, form.Years, form.Average)
+}
+
+func average(values []float64) float64 {
+	s := float64(0)
+	for _, v := range values {
+		s += v
+	}
+	return s / float64(len(values))
+}
+
+func (p *HeartRatePage) render(
+	ctx context.Context, db Storage, month, day int, years map[int]bool, avg int,
+) error {
+	ctx, span := telemetry.NewSpan(ctx, "heartrate.render")
+	defer span.End()
+
+	colors := []string{
+		"#0000ff", // 1
+		"#00ff00", // 2
+		"#ff0000", // 3
+		"#00ffff", // 4
+		"#ffff00", // 5
+		"#ff00ff", // 6
+		"#000088", // 7
+		"#008800", // 8
+		"#880000", // 9
+		"#00f000",
+		"#0000f0",
+	}
+
+	p.Form.EndMonth = month
+	p.Form.EndDay = day
+	p.Form.Years = years
+	checkedYears := selectedYears(years)
+	numbers, err := getHeartRate(ctx, db, month, day, checkedYears)
+	if err != nil {
+		slog.Error("failed to heartrate", "err", err)
+		return err
+	}
+	foundYears := []int{}
+	for _, year := range checkedYears {
+		if _, ok := numbers[year]; ok {
+			foundYears = append(foundYears, year)
+		}
+	}
+	if len(foundYears) == 0 {
+		slog.Error("No years found in heartrate.render()")
+		return nil
+	}
+	refTime, err := time.Parse(time.DateOnly, fmt.Sprintf("%d-01-01", slices.Max(foundYears)))
+	if err != nil {
+		return err
+	}
+	scriptRows := [][]interface{}{}
+	for day := range numbers[foundYears[0]] {
+		scriptRows = append(scriptRows, make([]interface{}, len(foundYears)+1))
+		index0 := refTime.Add(24 * time.Duration(day) * time.Hour)
+		// Month in JavaScript's Date is 0-indexed
+		newDate := fmt.Sprintf("new Date(%d, %d, %d)", index0.Year(), index0.Month()-1, index0.Day())
+		scriptRows[day][0] = template.JS(newDate) // #nosec G203
+		start := day - avg
+		if start < 0 {
+			start = 0
+		}
+		for idx, year := range foundYears {
+			end := day + avg
+			if end >= len(numbers[year]) {
+				end = len(numbers[year]) - 1
+			}
+			scriptRows[day][idx+1] = average(numbers[year][start : end+1])
+		}
+	}
+	byteRows, _ := json.Marshal(scriptRows)
+	byteColors, _ := json.Marshal(colors[0:len(foundYears)])
+	p.Data.ScriptColumns = foundYears
+	p.Data.ScriptRows = template.JS(strings.ReplaceAll(string(byteRows), `"`, ``)) // #nosec G203
+	p.Data.ScriptColors = template.JS(byteColors)                                  // #nosec G203
+	return err
+}
+
+func heartRatePost(ctx context.Context, page *HeartRatePage, db Storage) func(c echo.Context) error {
+	return func(c echo.Context) error {
+		_, span := telemetry.NewSpan(ctx, "heartratePOST")
+		defer span.End()
+		month, errM := strconv.Atoi(c.FormValue("EndMonth"))
+		day, errD := strconv.Atoi(c.FormValue("EndDay"))
+		avg, errA := strconv.Atoi(c.FormValue("Average"))
+		values, errV := c.FormParams()
+		years, errY := yearValues(values)
+		if err := errors.Join(errA, errM, errD, errV, errY); err != nil {
+			return telemetry.Error(span, err)
+		}
+		if avg < 0 {
+			avg = -avg
+		}
+		page.Form.Average = avg
+		slog.Info("POST /heartrate", "values", values)
+		return telemetry.Error(span, errors.Join(
+			page.render(ctx, db, month, day, years, avg), c.Render(200, "heartrate-data", page.Data),
+		))
+	}
+}
+
+func getHeartRate(ctx context.Context, db Storage, month, day int, years []int) (numbers, error) {
+	_, span := telemetry.NewSpan(ctx, "server.getHeartRate")
+	defer span.End()
+
+	o := []string{"year", "month", "day"}
+	opts := []storage.QueryOption{
+		storage.WithDayOfYear(day, month),
+		storage.WithTable(storage.HeartRateTable),
+		storage.WithOrder(storage.OrderConfig{GroupBy: o, OrderBy: o}),
+	}
+	for _, y := range years {
+		opts = append(opts, storage.WithYear(y))
+	}
+	years, err := db.QueryYears(opts...)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := db.Query(append(o, "RestingHR"), opts...)
+	if err != nil {
+		return nil, fmt.Errorf("select caused: %w", err)
+	}
+	defer func() {
+		if rows != nil {
+			if err := rows.Close(); err != nil {
+				_ = telemetry.Error(span, err)
+			}
+		}
+	}()
+	return absoluteScan(rows, years)
+}
+
+func absoluteScan(rows *sql.Rows, years []int) (numbers, error) {
+	tz, _ := time.LoadLocation("Europe/Helsinki")
+	day1 := map[int]time.Time{}
+	// ys is map, where key is year and array has entry for each day of the year
+	ys := map[int][]float64{}
+	for _, year := range years {
+		day1[year] = time.Date(year, time.January, 1, 6, 0, 0, 0, tz)
+		ys[year] = []float64{}
+	}
+	max_acts := 0
+	if rows == nil {
+		return ys, nil
+	}
+	for rows.Next() { // scan through database rows
+		var year, month, day int
+		var value float64
+		if err := rows.Scan(&year, &month, &day, &value); err != nil {
+			return ys, err
+		}
+		now := time.Date(year, time.Month(month), day, 6, 0, 0, 0, tz) // time when activity happened
+		days := int(now.Sub(day1[year]).Hours()/24) + 1                // day within a year (1-365)
+		if days > 366 {
+			log.Fatalf("days got impossible number %d (year=%d, month=%d, day=%d, now=%#v, day1=%#v)", days, year, month, day, now, day1[year])
+		}
+		yslen := len(ys[year])
+		previous_y := float64(0)
+		if yslen > 0 {
+			previous_y = ys[year][yslen-1]
+		}
+		for x := yslen; x < days-1; x++ { // fill the gaps on days that didn't have activities
+			ys[year] = append(ys[year], previous_y)
+		}
+		max_acts = max(max_acts, days)
+		ys[year] = append(ys[year], value)
+	}
+	for _, year := range years { // fill the end of year
+		yslen := len(ys[year])
+		previous_y := float64(0)
+		if yslen > 0 {
+			previous_y = ys[year][yslen-1]
+		}
+		for x := yslen; x < max_acts; x++ {
+			ys[year] = append(ys[year], previous_y)
+		}
+	}
+	return ys, nil
+}
