@@ -17,6 +17,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
+// Strava
 type SummaryRecord struct {
 	Year        int
 	Month       int
@@ -50,12 +51,19 @@ type SplitRecord struct {
 	Distance      float64
 }
 
+// Garmin
 type DailyStepsRecord struct {
 	Year       int
 	Month      int
 	Day        int
 	Week       int
 	TotalSteps int
+}
+
+type HeartRateRecord struct {
+	WellnessMaxAvgHR int
+	WellnessMinAvgHR int
+	RestingHR        int
 }
 
 type OrderConfig struct {
@@ -137,6 +145,7 @@ func WithWorkout(name string) QueryOption {
 const dbName string = "mystats.sql"
 const BestEffortTable string = "BestEffort"
 const DailyStepsTable string = "DailySteps"
+const HeartRateTable string = "HeartRate"
 const SplitTable string = "Split"
 const SummaryTable string = "Summary"
 
@@ -191,7 +200,12 @@ func (sq *Sqlite3) Create() error {
 		TotalSteps  integer,
 		StepGoal    integer
 	)`)
-	return errors.Join(errSummary, errBE, errSplit, errSteps)
+	_, errHeartRate := sq.db.Exec(`create table ` + HeartRateTable + ` ( ` + ymdw + `
+		WellnessMinAvgHR integer,
+		WellnessMaxAvgHR integer,
+		RestingHR integer
+	)`)
+	return errors.Join(errSummary, errBE, errHeartRate, errSplit, errSteps)
 }
 
 func (sq *Sqlite3) InsertSummary(ctx context.Context, records []SummaryRecord) error {
@@ -211,7 +225,7 @@ func (sq *Sqlite3) InsertSummary(ctx context.Context, records []SummaryRecord) e
 	q := strings.Repeat("?,", len(fields)-1) + "?"
 	stmt, err := tx.Prepare("insert into " + SummaryTable + "(" + strings.Join(fields, ",") + ") values (" + q + ")")
 	if err != nil {
-		return telemetry.Error(span, fmt.Errorf("insert caused %w", err))
+		return telemetry.Error(span, fmt.Errorf("InsertSummary caused %w", err))
 	}
 	defer stmt.Close()
 	for _, r := range records {
@@ -241,7 +255,7 @@ func (sq *Sqlite3) InsertBestEffort(ctx context.Context, records []BestEffortRec
 	q := strings.Repeat("?,", len(fields)-1) + "?"
 	stmt, err := tx.Prepare("insert into " + BestEffortTable + "(" + strings.Join(fields, ",") + ") values (" + q + ")")
 	if err != nil {
-		return telemetry.Error(span, fmt.Errorf("insert caused %w", err))
+		return telemetry.Error(span, fmt.Errorf("InsertBestEffort caused %w", err))
 	}
 	defer stmt.Close()
 	for _, r := range records {
@@ -266,7 +280,7 @@ func (sq *Sqlite3) InsertSplit(ctx context.Context, records []SplitRecord) error
 	q := strings.Repeat("?,", len(fields)-1) + "?"
 	stmt, err := tx.Prepare("insert into " + SplitTable + "(" + strings.Join(fields, ",") + ") values (" + q + ")")
 	if err != nil {
-		return telemetry.Error(span, fmt.Errorf("insert caused %w", err))
+		return telemetry.Error(span, fmt.Errorf("InsertSplit caused %w", err))
 	}
 	defer stmt.Close()
 	for _, r := range records {
@@ -280,6 +294,7 @@ func (sq *Sqlite3) InsertSplit(ctx context.Context, records []SplitRecord) error
 func (sq *Sqlite3) InsertDailySteps(ctx context.Context, records map[string]garmin.DailyStepsStat) error {
 	_, span := telemetry.NewSpan(ctx, "InsertDailySteps")
 	defer span.End()
+	// slog.Info("storage.InsertDailySteps", "records", records)
 	if sq.db == nil {
 		return telemetry.Error(span, errors.New("database is nil"))
 	}
@@ -287,9 +302,11 @@ func (sq *Sqlite3) InsertDailySteps(ctx context.Context, records map[string]garm
 	if err != nil {
 		return telemetry.Error(span, err)
 	}
-	stmt, err := tx.Prepare(`insert into DailySteps(Year,Month,Day,Week,TotalSteps,StepGoal) values (?,?,?,?,?,?)`)
+	fields := []string{"Year", "Month", "Day", "Week", "TotalSteps", "StepGoal"}
+	q := strings.Repeat("?,", len(fields)-1) + "?"
+	stmt, err := tx.Prepare("insert into " + DailyStepsTable + "(" + strings.Join(fields, ",") + ") values (" + q + ")")
 	if err != nil {
-		return telemetry.Error(span, fmt.Errorf("insert caused %w", err))
+		return telemetry.Error(span, fmt.Errorf("InsertDailySteps caused %w", err))
 	}
 	for key, r := range records {
 		t, err := time.Parse(time.DateOnly, key)
@@ -299,6 +316,38 @@ func (sq *Sqlite3) InsertDailySteps(ctx context.Context, records map[string]garm
 		_, week := t.ISOWeek()
 		if _, err = stmt.Exec(t.Year(), t.Month(), t.Day(), week, r.TotalSteps, r.StepGoal); err != nil {
 			return telemetry.Error(span, fmt.Errorf("InsertDailySteps statement execution caused: %w", err))
+		}
+	}
+	defer stmt.Close()
+	return telemetry.Error(span, tx.Commit())
+}
+
+func (sq *Sqlite3) InsertHeartRate(ctx context.Context, records map[string]garmin.HeartRateStat) error {
+	_, span := telemetry.NewSpan(ctx, "InsertHeartRate")
+	defer span.End()
+	slog.Info("storage.InsertHeartRate", "records", records)
+	if sq.db == nil {
+		return telemetry.Error(span, errors.New("database is nil"))
+	}
+	tx, err := sq.db.Begin()
+	if err != nil {
+		return telemetry.Error(span, err)
+	}
+	fields := []string{"Year", "Month", "Day", "Week", "WellnessMinAvgHR", "WellnessMaxAvgHR", "RestingHR"}
+	q := strings.Repeat("?,", len(fields)-1) + "?"
+	stmt, err := tx.Prepare("insert into " + HeartRateTable + "(" + strings.Join(fields, ",") + ") values (" + q + ")")
+	if err != nil {
+		return telemetry.Error(span, fmt.Errorf("InsertHeartRate caused %w", err))
+	}
+	for key, r := range records {
+		slog.Info("InsertHeartRate", "key", key, "r", r)
+		t, err := time.Parse(time.DateOnly, key)
+		if err != nil {
+			return telemetry.Error(span, fmt.Errorf("InsertHeartRate time parsing (%s) caused: %w", key, err))
+		}
+		_, week := t.ISOWeek()
+		if _, err = stmt.Exec(t.Year(), t.Month(), t.Day(), week, r.WellnessMinAvgHR, r.WellnessMaxAvgHR, r.RestingHR); err != nil {
+			return telemetry.Error(span, fmt.Errorf("InsertHeartRate statement execution caused: %w", err))
 		}
 	}
 	defer stmt.Close()

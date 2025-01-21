@@ -16,6 +16,7 @@ import (
 	"github.com/labstack/gommon/log"
 	"github.com/spf13/cobra"
 
+	gogarmin "github.com/jylitalo/go-garmin"
 	"github.com/jylitalo/mystats/api/garmin"
 	"github.com/jylitalo/mystats/api/strava"
 	"github.com/jylitalo/mystats/config"
@@ -51,22 +52,33 @@ func fetch(ctx context.Context, best_efforts bool) error {
 	if err != nil {
 		return telemetry.Error(span, err)
 	}
-	if err := getDailySteps(ctx); err != nil {
+	cfg, err := config.Get(ctx)
+	if err != nil {
+		return telemetry.Error(span, err)
+	}
+	garminClient, err := garmin.NewAPI(cfg.Garmin.Username, cfg.Garmin.Password)
+	if err != nil {
+		return telemetry.Error(span, err)
+	}
+	if err := getDailySteps(ctx, garminClient, cfg.Garmin.DailySteps); err != nil {
+		return telemetry.Error(span, err)
+	}
+	if err := getHeartRate(ctx, garminClient, cfg.Garmin.HeartRate); err != nil {
 		return telemetry.Error(span, err)
 	}
 	status, errS := getJsonStatus(ctx)
-	ctx, client, errC := getStravaClient(ctx)
+	ctx, stravaClient, errC := getStravaClient(ctx)
 	if err := errors.Join(errS, errC); err != nil {
 		return telemetry.Error(span, err)
 	}
-	call, err := callListActivities(ctx, client, status.latest)
+	call, err := callListActivities(ctx, stravaClient, status.latest)
 	if err != nil {
 		return telemetry.Error(span, err)
 	}
 	ids, apiCalls, err := saveActivities(ctx, call, status.pages)
 	if err == nil && best_efforts {
 		ids = append(ids, status.ids...)
-		err = fetchBestEfforts(ctx, client, ids, apiCalls)
+		err = fetchBestEfforts(ctx, stravaClient, ids, apiCalls)
 	}
 	if err != nil && strava.IsRateLimitExceeded(err) {
 		slog.Warn("Strava API Rate Limit Exceeded")
@@ -75,19 +87,42 @@ func fetch(ctx context.Context, best_efforts bool) error {
 	return telemetry.Error(span, err)
 }
 
-func getDailySteps(ctx context.Context) error {
+func getHeartRate(ctx context.Context, client *gogarmin.API, path string) error {
+	ctx, span := telemetry.NewSpan(ctx, "getHRs")
+	defer span.End()
+	all := false
+	if path == "" {
+		return telemetry.Error(span, errors.New("path is empty"))
+	}
+	hrFiles, err := heartRateFiles(path)
+	switch {
+	case err != nil:
+		return err
+	case len(hrFiles) == 0:
+		if _, err = os.Stat(path); os.IsNotExist(err) {
+			if err = os.Mkdir(path, 0750); err != nil {
+				err = fmt.Errorf("mkdir '%s' failed due to %w", path, err)
+				return telemetry.Error(span, err)
+			}
+		}
+		all = true
+	}
+	data, err := garmin.HeartRate(client.UserSummary, all)
+	if err != nil {
+		return err
+	}
+	fname := fmt.Sprintf("%s/hr_%d.json", path, len(hrFiles)+1)
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(fname, jsonData, 0600)
+}
+
+func getDailySteps(ctx context.Context, client *gogarmin.API, path string) error {
 	ctx, span := telemetry.NewSpan(ctx, "getDailySteps")
 	defer span.End()
-	cfg, err := config.Get(ctx)
-	if err != nil {
-		return err
-	}
-	client, err := garmin.NewUserSummary(cfg.Garmin.Username, cfg.Garmin.Password)
-	if err != nil {
-		return err
-	}
 	all := false
-	path := cfg.Garmin.DailySteps
 	if path == "" {
 		return telemetry.Error(span, errors.New("path is empty"))
 	}
@@ -104,7 +139,7 @@ func getDailySteps(ctx context.Context) error {
 		}
 		all = true
 	}
-	steps, err := garmin.DailySteps(client, all)
+	steps, err := garmin.DailySteps(client.UserSummary, all)
 	if err != nil {
 		return err
 	}
@@ -119,6 +154,10 @@ func getDailySteps(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+func heartRateFiles(path string) ([]string, error) {
+	return filepath.Glob(path + "/hr*.json")
 }
 
 func stepsFiles(path string) ([]string, error) {

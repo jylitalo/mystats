@@ -79,7 +79,8 @@ func makeDB(ctx context.Context, update bool) (Storage, error) {
 	pageFnames, errP := pageFiles(cfg.Strava.Summaries)
 	actFnames, errF := activitiesFiles(cfg.Strava.Activities)
 	stepsFiles, errS := stepsFiles(cfg.Garmin.DailySteps)
-	if err := errors.Join(errP, errF, errS); err != nil {
+	heartRateFiles, errHR := heartRateFiles(cfg.Garmin.HeartRate)
+	if err := errors.Join(errP, errF, errS, errHR); err != nil {
 		return nil, telemetry.Error(span, err)
 	}
 	db := &storage.Sqlite3{}
@@ -144,15 +145,19 @@ func makeDB(ctx context.Context, update bool) (Storage, error) {
 			}
 		}
 	}
-	dbDailySteps, err := garmin.ReadDailyStepsJSONs(ctx, stepsFiles)
+	dbDailySteps, errDS := garmin.ReadDailyStepsJSONs(ctx, stepsFiles)
+	dbHeartRate, errHR := garmin.ReadHeartRateJSONs(ctx, heartRateFiles)
+	if err := errors.Join(errDS, errHR); err != nil {
+		return nil, telemetry.Error(span, err)
+	}
 	ctx, spanDB := telemetry.NewSpan(ctx, "rebuildDB")
 	defer spanDB.End()
-	errR := db.Remove()
-	errO := db.Open()
-	errC := db.Create()
-	errI := db.InsertSummary(ctx, dbActivities)
-	errBE := db.InsertBestEffort(ctx, dbEfforts)
-	errSplit := db.InsertSplit(ctx, dbSplits)
-	errSteps := db.InsertDailySteps(ctx, dbDailySteps)
-	return db, telemetry.Error(spanDB, errors.Join(errR, errO, errC, errI, errBE, errSplit, errSteps))
+	return db, telemetry.Error(spanDB, errors.Join(
+		db.Remove(), db.Open(), db.Create(),
+		db.InsertSummary(ctx, dbActivities),
+		db.InsertBestEffort(ctx, dbEfforts),
+		db.InsertSplit(ctx, dbSplits),
+		db.InsertDailySteps(ctx, dbDailySteps),
+		db.InsertHeartRate(ctx, dbHeartRate),
+	))
 }
