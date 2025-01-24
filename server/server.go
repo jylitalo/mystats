@@ -199,7 +199,7 @@ func sportsValues(values url.Values) (map[string]bool, error) {
 	sports := map[string]bool{}
 	for k, v := range values {
 		if strings.HasPrefix(k, "sport_") {
-			tv := strings.ReplaceAll(k[5:], "_", " ")
+			tv := strings.ReplaceAll(k[6:], "_", " ")
 			sports[tv] = (len(tv) > 0 && v[0] == "on")
 		}
 	}
