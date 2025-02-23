@@ -14,44 +14,60 @@ import (
 
 type testDB struct{}
 
-func (t *testDB) QueryBestEffort(fields []string, distance string, order *storage.Order) (*sql.Rows, error) {
-	return nil, nil
-}
-
 func (t *testDB) QueryBestEffortDistances() ([]string, error) {
 	return nil, nil
 }
 
-func (t *testDB) QuerySplit(fields []string, id int64) (*sql.Rows, error) {
+func (t *testDB) Query(fields []string, opts ...storage.QueryOption) (*sql.Rows, error) {
 	return nil, nil
 }
 
-func (t *testDB) QuerySummary(fields []string, cond storage.SummaryConditions, order *storage.Order) (*sql.Rows, error) {
+func (t *testDB) QuerySports() ([]string, error) {
 	return nil, nil
 }
 
-func (t *testDB) QueryTypes(cond storage.SummaryConditions) ([]string, error) {
+func (t *testDB) QueryWorkouts() ([]string, error) {
 	return nil, nil
 }
 
-func (t *testDB) QueryWorkoutTypes(cond storage.SummaryConditions) ([]string, error) {
-	return nil, nil
-}
-
-func (t *testDB) QueryYears(cond storage.SummaryConditions) ([]int, error) {
+func (t *testDB) QueryYears(opts ...storage.QueryOption) ([]int, error) {
 	return nil, nil
 }
 
 func TestTemplateRender(t *testing.T) {
-	p := newPage()
-	p.Plot.Data.stats = func(
-		ctx context.Context, db stats.Storage, measurement, period string, types, workoutTypes []string,
-		month, day int, years []int) ([]int, [][]string, []string, error,
-	) {
-		return nil, nil, nil, nil
-	}
 	ctx, _, _ := telemetry.Setup(context.TODO(), "test")
-	err := p.Plot.render(ctx, &testDB{}, map[string]bool{"Run": true}, nil, 6, 12, map[int]bool{2024: true}, "month")
+	db := &testDB{}
+	p, err := newPage(
+		ctx, db,
+		func(pc *pageConfig) {
+			pc.bestStats = func(ctx context.Context, db stats.Storage, distance string, limit int) ([]string, [][]string, error) {
+				return nil, nil, nil
+			}
+			pc.listStats = func(ctx context.Context, db stats.Storage, sports, workouts []string, years []int, limit int, name string) ([]string, [][]string, error) {
+				return nil, nil, nil
+			}
+			pc.plotStats = func(
+				ctx context.Context, db stats.Storage, measurement, period string, sports, workouts []string,
+				month, day int, years []int) ([]int, [][]string, []string, error,
+			) {
+				return nil, nil, nil, nil
+			}
+			pc.stepsStats = func(ctx context.Context, db Storage, period string, month, day int, years []int,
+			) ([]int, [][]string, []string, error) {
+				return nil, nil, nil, nil
+			}
+			pc.topStats = func(ctx context.Context, db stats.Storage, measure, period string, sports, workouts []string,
+				limit int, years []int,
+			) ([]string, [][]string, error) {
+				return nil, nil, nil
+			}
+			pc.sports = []string{"Race"}
+		},
+	)
+	if err != nil {
+		t.Error(err)
+	}
+	err = p.Plot.render(ctx, &testDB{}, map[string]bool{"Run": true}, nil, 6, 12, map[int]bool{2024: true}, "month")
 	if err != nil {
 		t.Error(err)
 	}

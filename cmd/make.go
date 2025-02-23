@@ -11,20 +11,19 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/spf13/cobra"
 
-	"github.com/jylitalo/mystats/api"
+	"github.com/jylitalo/mystats/api/garmin"
+	"github.com/jylitalo/mystats/api/strava"
 	"github.com/jylitalo/mystats/config"
 	"github.com/jylitalo/mystats/pkg/telemetry"
 	"github.com/jylitalo/mystats/storage"
 )
 
 type Storage interface {
-	QueryBestEffort(fields []string, name string, order *storage.Order) (*sql.Rows, error)
 	QueryBestEffortDistances() ([]string, error)
-	QuerySplit(fields []string, id int64) (*sql.Rows, error)
-	QuerySummary(fields []string, cond storage.SummaryConditions, order *storage.Order) (*sql.Rows, error)
-	QueryTypes(cond storage.SummaryConditions) ([]string, error)
-	QueryWorkoutTypes(cond storage.SummaryConditions) ([]string, error)
-	QueryYears(cond storage.SummaryConditions) ([]int, error)
+	QuerySports() ([]string, error)
+	QueryWorkouts() ([]string, error)
+	QueryYears(opts ...storage.QueryOption) ([]int, error)
+	Query(fields []string, opts ...storage.QueryOption) (*sql.Rows, error)
 	Close() error
 }
 
@@ -79,7 +78,9 @@ func makeDB(ctx context.Context, update bool) (Storage, error) {
 	}
 	pageFnames, errP := pageFiles(cfg.Strava.Summaries)
 	actFnames, errF := activitiesFiles(cfg.Strava.Activities)
-	if err := errors.Join(errP, errF); err != nil {
+	stepsFiles, errS := stepsFiles(cfg.Garmin.DailySteps)
+	heartRateFiles, errHR := heartRateFiles(cfg.Garmin.HeartRate)
+	if err := errors.Join(errP, errF, errS, errHR); err != nil {
 		return nil, telemetry.Error(span, err)
 	}
 	db := &storage.Sqlite3{}
@@ -92,7 +93,7 @@ func makeDB(ctx context.Context, update bool) (Storage, error) {
 	}
 	slog.Info("Making database")
 	dbActivities := []storage.SummaryRecord{}
-	if activities, err := api.ReadSummaryJSONs(pageFnames); err != nil {
+	if activities, err := strava.ReadSummaryJSONs(pageFnames); err != nil {
 		return nil, telemetry.Error(span, err)
 	} else {
 		for _, activity := range activities {
@@ -117,7 +118,7 @@ func makeDB(ctx context.Context, update bool) (Storage, error) {
 	}
 	dbEfforts := []storage.BestEffortRecord{}
 	dbSplits := []storage.SplitRecord{}
-	if acts, err := api.ReadActivityJSONs(ctx, actFnames); err != nil {
+	if acts, err := strava.ReadActivityJSONs(ctx, actFnames); err != nil {
 		return nil, telemetry.Error(span, err)
 	} else {
 		for _, activity := range acts {
@@ -144,13 +145,19 @@ func makeDB(ctx context.Context, update bool) (Storage, error) {
 			}
 		}
 	}
+	dbDailySteps, errDS := garmin.ReadDailyStepsJSONs(ctx, stepsFiles)
+	dbHeartRate, errHR := garmin.ReadHeartRateJSONs(ctx, heartRateFiles)
+	if err := errors.Join(errDS, errHR); err != nil {
+		return nil, telemetry.Error(span, err)
+	}
 	ctx, spanDB := telemetry.NewSpan(ctx, "rebuildDB")
 	defer spanDB.End()
-	errR := db.Remove()
-	errO := db.Open()
-	errC := db.Create()
-	errI := db.InsertSummary(ctx, dbActivities)
-	errBE := db.InsertBestEffort(ctx, dbEfforts)
-	errSplit := db.InsertSplit(ctx, dbSplits)
-	return db, telemetry.Error(spanDB, errors.Join(errR, errO, errC, errI, errBE, errSplit))
+	return db, telemetry.Error(spanDB, errors.Join(
+		db.Remove(), db.Open(), db.Create(),
+		db.InsertSummary(ctx, dbActivities),
+		db.InsertBestEffort(ctx, dbEfforts),
+		db.InsertSplit(ctx, dbSplits),
+		db.InsertDailySteps(ctx, dbDailySteps),
+		db.InsertHeartRate(ctx, dbHeartRate),
+	))
 }

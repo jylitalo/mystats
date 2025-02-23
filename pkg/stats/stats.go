@@ -11,13 +11,14 @@ import (
 )
 
 type Storage interface {
-	QueryBestEffort(fields []string, name string, order *storage.Order) (*sql.Rows, error)
-	QuerySplit(fields []string, id int64) (*sql.Rows, error)
-	QuerySummary(fields []string, cond storage.SummaryConditions, order *storage.Order) (*sql.Rows, error)
-	QueryYears(cond storage.SummaryConditions) ([]int, error)
+	QueryYears(opts ...storage.QueryOption) ([]int, error)
+	Query(fields []string, opts ...storage.QueryOption) (*sql.Rows, error)
 }
 
-func Stats(ctx context.Context, db Storage, measure, period string, types, workoutTypes []string, month, day int, years []int) ([]int, [][]string, []string, error) {
+func Stats(
+	ctx context.Context, db Storage, measure, period string, sports, workouts []string,
+	month, day int, years []int,
+) ([]int, [][]string, []string, error) {
 	_, span := telemetry.NewSpan(ctx, "stats.Stats")
 	defer span.End()
 
@@ -28,11 +29,8 @@ func Stats(ctx context.Context, db Storage, measure, period string, types, worko
 	if _, ok := inYear[period]; !ok {
 		return nil, nil, nil, telemetry.Error(span, fmt.Errorf("unknown period: %s", period))
 	}
-	cond := storage.SummaryConditions{
-		Types: types, WorkoutTypes: workoutTypes, Month: month, Day: day, Years: years,
-	}
 	results := make([][]string, inYear[period])
-	years, err := db.QueryYears(cond)
+	years, err := db.QueryYears()
 	if err != nil {
 		return nil, nil, nil, telemetry.Error(span, err)
 	}
@@ -50,10 +48,22 @@ func Stats(ctx context.Context, db Storage, measure, period string, types, worko
 	if strings.Contains(measure, "(time)") {
 		measure = strings.ReplaceAll(measure, "(time)", "(elapsedtime)")
 	}
-	rows, err := db.QuerySummary(
-		[]string{"year", period, measure}, cond,
-		&storage.Order{GroupBy: []string{period, "year"}, OrderBy: []string{period, "year"}},
-	)
+	o := []string{period, "year"}
+	opts := []storage.QueryOption{
+		storage.WithTable(storage.SummaryTable),
+		storage.WithDayOfYear(day, month),
+		storage.WithOrder(storage.OrderConfig{GroupBy: o, OrderBy: o}),
+	}
+	for _, s := range sports {
+		opts = append(opts, storage.WithSport(s))
+	}
+	for _, w := range workouts {
+		opts = append(opts, storage.WithWorkout(w))
+	}
+	for _, y := range years {
+		opts = append(opts, storage.WithYear(y))
+	}
+	rows, err := db.Query([]string{"Year", period, measure}, opts...)
 	if err != nil {
 		return nil, nil, nil, telemetry.Error(span, fmt.Errorf("select caused: %w", err))
 	}

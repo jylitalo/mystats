@@ -10,11 +10,14 @@ import (
 
 	"gopkg.in/yaml.v2"
 
-	"github.com/jylitalo/mystats/api"
+	"github.com/jylitalo/mystats/api/garmin"
+	"github.com/jylitalo/mystats/api/strava"
+	"github.com/jylitalo/mystats/pkg/data"
 )
 
 type Config struct {
-	Strava  *api.Config `yaml:"strava"`
+	Garmin  *garmin.Config `yaml:"garmin"`
+	Strava  *strava.Config `yaml:"strava"`
 	Default struct {
 		Types []string `yaml:"types"`
 	} `yaml:"default"`
@@ -39,6 +42,7 @@ func Get(ctx context.Context) (*Config, error) {
 	}
 	return cfg.(*Config), nil
 }
+
 func Read(ctx context.Context, refresh bool) (context.Context, error) {
 	setLogger()
 	fname, err := configFile()
@@ -49,16 +53,13 @@ func Read(ctx context.Context, refresh bool) (context.Context, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error in reading .mystats.yaml")
 	}
-	cfg := Config{Strava: &api.Config{}}
+	cfg := Config{Strava: &strava.Config{}}
 	if err = yaml.Unmarshal(body, &cfg); err != nil {
 		return nil, fmt.Errorf("error in parsing .mystats.yaml")
 	}
-	if cfg.Strava.Activities == "" {
-		cfg.Strava.Activities = "activities"
-	}
-	if cfg.Strava.Summaries == "" {
-		cfg.Strava.Summaries = "pages"
-	}
+	cfg.Garmin.DailySteps = data.Coalesce(cfg.Garmin.DailySteps, "daily_steps")
+	cfg.Strava.Activities = data.Coalesce(cfg.Strava.Activities, "activities")
+	cfg.Strava.Summaries = data.Coalesce(cfg.Strava.Summaries, "pages")
 	ctx = context.WithValue(ctx, configKey, &cfg)
 	if !refresh {
 		return ctx, nil

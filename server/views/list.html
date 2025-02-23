@@ -8,8 +8,8 @@
 
 {{ block "list-form" . }}
 <form hx-swap="outerHTML" hx-target="#list-data" hx-post="/list">
-    {{ template "types" . }}
-    {{ template "workouttypes" . }}
+    {{ template "sports" . }}
+    {{ template "workouts" . }}
     {{ template "years" . }}
     <div id="list-name">
         <b>Name:</b><input name="name" type="text" hx-swap="outerHTML" hx-target="#list-data" hx-post="/list"></input>

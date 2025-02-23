@@ -9,17 +9,32 @@ import (
 	"github.com/jylitalo/mystats/storage"
 )
 
-func List(ctx context.Context, db Storage, types, workouts []string, years []int, limit int, name string) ([]string, [][]string, error) {
+func List(ctx context.Context, db Storage, sports, workouts []string, years []int, limit int, name string) ([]string, [][]string, error) {
 	_, span := telemetry.NewSpan(ctx, "stats.List")
 	defer span.End()
 
-	o := []string{"year", "month", "day", "stravaid"}
-	rows, err := db.QuerySummary(
-		[]string{"year", "month", "day", "name", "distance", "elevation", "elapsedtime", "type", "workouttype", "stravaid"},
-		storage.SummaryConditions{WorkoutTypes: workouts, Types: types, Years: years, Name: name},
-		&storage.Order{GroupBy: o, OrderBy: o, Limit: limit},
+	opts := []storage.QueryOption{
+		storage.WithTable(storage.SummaryTable),
+		storage.WithName(name),
+	}
+	for _, s := range sports {
+		opts = append(opts, storage.WithSport(s))
+	}
+	for _, w := range workouts {
+		opts = append(opts, storage.WithWorkout(w))
+	}
+	for _, y := range years {
+		opts = append(opts, storage.WithYear(y))
+	}
+	o := []string{"Year", "Month", "Day", "StravaID"}
+	opts = append(opts, storage.WithOrder(storage.OrderConfig{GroupBy: o, OrderBy: o, Limit: limit}))
+	rows, err := db.Query(
+		[]string{
+			"Year", "Month", "Day", "Name", "Distance", "Elevation", "Elapsedtime",
+			"Type", "Workouttype", "StravaID",
+		}, opts...,
 	)
-	if err != nil {
+	if rows == nil || err != nil {
 		return nil, nil, telemetry.Error(span, fmt.Errorf("query caused: %w", err))
 	}
 	defer rows.Close()
@@ -40,7 +55,11 @@ func List(ctx context.Context, db Storage, types, workouts []string, years []int
 			typeName, workoutType, fmt.Sprintf("https://strava.com/activities/%d", stravaID),
 		})
 	}
-	return []string{"ID", "Date", "Name", "Distance (km)", "Elevation (m)", "Time", "Type", "Workout Type", "Link"}, results, nil
+	return []string{
+			"ID", "Date", "Name", "Distance (km)", "Elevation (m)", "Time",
+			"Type", "Workout Type", "Link",
+		},
+		results, nil
 }
 
 func Split(ctx context.Context, db Storage, id int64) ([]string, [][]string, error) {
@@ -50,7 +69,10 @@ func Split(ctx context.Context, db Storage, id int64) ([]string, [][]string, err
 	_, span := telemetry.NewSpan(ctx, "stats.Split")
 	defer span.End()
 
-	rows, err := db.QuerySplit([]string{"split", "elapsedtime", "elevationdiff"}, id)
+	rows, err := db.Query(
+		[]string{"split", "elapsedtime", "elevationdiff"},
+		storage.WithTable(storage.SplitTable), storage.WithStravaID(id),
+	)
 	if err != nil {
 		return nil, nil, telemetry.Error(span, fmt.Errorf("query caused: %w", err))
 	}

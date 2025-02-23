@@ -6,15 +6,13 @@ import (
 	"os"
 
 	"github.com/jylitalo/mystats/cmd"
+	"github.com/jylitalo/mystats/pkg/data"
 	"github.com/jylitalo/mystats/pkg/telemetry"
 )
 
 func main() {
 	ctx := context.Background()
-	telemetryName := os.Getenv("MYSTATS_TELEMETRY")
-	if telemetryName == "" {
-		telemetryName = "mystats"
-	}
+	telemetryName := data.Coalesce(os.Getenv("MYSTATS_TELEMETRY"), "mystats")
 	ctx, otel, err := telemetry.Setup(ctx, telemetryName)
 	if err != nil {
 		log.Fatal(err)

@@ -12,14 +12,20 @@ func Best(ctx context.Context, db Storage, distance string, limit int) ([]string
 	_, span := telemetry.NewSpan(ctx, "stats.Best")
 	defer span.End()
 
-	o := []string{"besteffort.movingtime", "year", "month", "day"}
-	rows, err := db.QueryBestEffort(
+	o := []string{storage.BestEffortTable + ".Movingtime", "Year", "Month", "Day"}
+	rows, err := db.Query(
 		[]string{
-			"year", "month", "day", "summary.name", "summary.distance", "summary.elapsedtime",
-			"besteffort.movingtime", "besteffort.elapsedtime",
-			"summary.StravaID",
+			"Year", "Month", "Day",
+			storage.SummaryTable + ".Name",
+			storage.SummaryTable + ".Distance",
+			storage.SummaryTable + ".Elapsedtime",
+			storage.BestEffortTable + ".Movingtime",
+			storage.BestEffortTable + ".Elapsedtime",
+			storage.SummaryTable + ".StravaID",
 		},
-		distance, &storage.Order{OrderBy: o, Limit: limit},
+		storage.WithName(distance),
+		storage.WithTable(storage.SummaryTable), storage.WithTable(storage.BestEffortTable),
+		storage.WithOrder(storage.OrderConfig{OrderBy: o, Limit: limit}),
 	)
 	if err != nil {
 		return nil, nil, telemetry.Error(span, fmt.Errorf("query caused: %w", err))

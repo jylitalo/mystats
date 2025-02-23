@@ -1,14 +1,14 @@
-{{ block "plot-tab" . }}
-{{ template "plot-form" .Form }}
+{{ block "steps-tab" . }}
+{{ template "steps-form" .Form }}
 <hr />
-{{ template "plot-data" .Data }}
+{{ template "steps-data" .Data }}
 {{ end }}
 
-{{ block "plot-form" . }}
-<form hx-swap="outerHTML" hx-target="#plot-data" hx-post="/plot">
+{{ block "steps-form" . }}
+<form hx-swap="outerHTML" hx-target="#steps-data" hx-post="/steps">
     <div id="month">
         <b>Month:</b>
-        <select hx-swap="outerHTML" hx-target="#plot-data" hx-post="/plot" name="EndMonth">
+        <select hx-swap="outerHTML" hx-target="#steps-data" hx-post="/steps" name="EndMonth">
             {{ $endMonth := .EndMonth -}}
             {{ range $m := N 1 13 -}}
                 <option value="{{ $m }}"{{ if eq $m $endMonth }}  SELECTED{{ end }}>{{ month $m }}</option>
@@ -17,60 +17,45 @@
     </div>
     <div id="day">
         <b>Day:</b>
-        <select hx-swap="outerHTML" hx-target="#plot-data" hx-post="/plot" name="EndDay">
+        <select hx-swap="outerHTML" hx-target="#steps-data" hx-post="/steps" name="EndDay">
             {{ $endDay := .EndDay -}}
             {{ range $d := N 1 32 -}}
                 <option value="{{ $d }}"{{ if eq $d $endDay }}  selected{{ end }}>{{ $d }}</option>
             {{ end }}
         </select>
     </div>
-    <div id="plot-period">
+    <div id="steps-period">
         <b>Period in table:</b>
-        <select hx-swap="outerHTML" hx-target="#plot-data" hx-post="/plot" name="Period">
+        <select hx-swap="outerHTML" hx-target="#steps-data" hx-post="/steps" name="Period">
             {{ $period := .Period -}}
             {{ range $p := .PeriodOptions -}}
                 <option value="{{ $p }}"{{ if eq $p $period }}  selected{{ end }}>{{ $p }}</option>
             {{ end }}
         </select>
     </div>
-    <div id="plot-measure">
-        <b>Measure:</b>
-        <select hx-swap="outerHTML" hx-target="#plot-data" hx-post="/plot" name="Measure">
-            {{ $measure := .Measure -}}
-            {{ range $m := .MeasureOptions -}}
-                <option value="{{ $m }}"{{ if eq $m $measure }}  selected{{ end }}>{{ $m }}</option>
-            {{ end }}
-        </select>
-    </div>
-    {{ template "sports" . }}
-    {{ template "workouts" . }}
     {{ template "years" . }}
 </form>
 {{ end }}
 
-{{ block "plot-data" . }}
-<div id="plot-data">
-    {{ template "plot-plot" . }}
+{{ block "steps-data" . }}
+<div id="steps-data">
+    {{ template "steps-plot" . }}
     <hr />
-    {{ template "plot-stats" . }}
+    {{ template "steps-stats" . }}
 </div>
 {{ end }}
 
-{{ block "plot-plot" . }}
-<div id="plot" style="display: flex; flex-direction: column">
+{{ block "steps-plot" . }}
+<div id="steps" style="display: flex; flex-direction: column">
     <script type="text/javascript">
-        google.charts.setOnLoadCallback(plotDrawLineColors);
-        function plotDrawLineColors() {
+        google.charts.setOnLoadCallback(stepsDrawLineColors);
+        function stepsDrawLineColors() {
             var data = new google.visualization.DataTable();
             var options = {
                 height: 750,
+                width: '100%',
                 hAxis: { title: 'days', format: 'MMM dd' },
-                vAxis: { title: 
-                    {{- if eq .Measure "time" }}"time (h)"
-                    {{- else if eq .Measure "distance" }}"distance (km)"
-                    {{- else if eq .Measure "elevation" }}"elevation (m)"
-                    {{- else }}{{ .Measure }}
-                    {{- end }} },
+                vAxis: { title: 'Daily steps' },
                 colors: {{ .ScriptColors }}
             };
 
@@ -81,19 +66,19 @@
             data.addRows({{ .ScriptRows }});
             var formatter = new google.visualization.DateFormat({pattern: 'MMM dd'});
             formatter.format(data, 0);
-            var chart = new google.visualization.LineChart(document.getElementById('chart_div'));
+            var chart = new google.visualization.LineChart(document.getElementById('steps_div'));
             chart.draw(data, options);
         };
     </script>
-    <div class="chart" id="chart_div"></div>
+    <div class="chart" id="steps_div"></div>
 </div>
 {{ end }}
 
-{{ block "plot-stats" . }}
+{{ block "steps-stats" . }}
 <table>
     <thead>
         <tr>
-          <th>{{ .Measure }}</th>
+          <th>TotalSteps</th>
           {{ range $s := .Years }}
           <th>{{ $s }}</th>
           {{ end }}

@@ -13,9 +13,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/labstack/gommon/log"
 	"github.com/spf13/cobra"
 
-	"github.com/jylitalo/mystats/api"
+	gogarmin "github.com/jylitalo/go-garmin"
+	"github.com/jylitalo/mystats/api/garmin"
+	"github.com/jylitalo/mystats/api/strava"
 	"github.com/jylitalo/mystats/config"
 	"github.com/jylitalo/mystats/pkg/telemetry"
 )
@@ -45,41 +48,137 @@ func fetch(ctx context.Context, best_efforts bool) error {
 	ctx, span := telemetry.NewSpan(ctx, "fetch")
 	defer span.End()
 
+	ctx, err := config.Read(ctx, true)
+	if err != nil {
+		return telemetry.Error(span, err)
+	}
+	cfg, err := config.Get(ctx)
+	if err != nil {
+		return telemetry.Error(span, err)
+	}
+	garminClient, err := garmin.NewAPI(cfg.Garmin.Username, cfg.Garmin.Password)
+	if err != nil {
+		return telemetry.Error(span, err)
+	}
+	if err := getDailySteps(ctx, garminClient, cfg.Garmin.DailySteps); err != nil {
+		return telemetry.Error(span, err)
+	}
+	if err := getHeartRate(ctx, garminClient, cfg.Garmin.HeartRate); err != nil {
+		return telemetry.Error(span, err)
+	}
 	status, errS := getJsonStatus(ctx)
-	ctx, client, errC := getClient(ctx)
+	ctx, stravaClient, errC := getStravaClient(ctx)
 	if err := errors.Join(errS, errC); err != nil {
 		return telemetry.Error(span, err)
 	}
-	call, err := callListActivities(ctx, client, status.latest)
+	call, err := callListActivities(ctx, stravaClient, status.latest)
 	if err != nil {
 		return telemetry.Error(span, err)
 	}
 	ids, apiCalls, err := saveActivities(ctx, call, status.pages)
 	if err == nil && best_efforts {
 		ids = append(ids, status.ids...)
-		err = fetchBestEfforts(ctx, client, ids, apiCalls)
+		err = fetchBestEfforts(ctx, stravaClient, ids, apiCalls)
 	}
-	if err != nil && api.IsRateLimitExceeded(err) {
+	if err != nil && strava.IsRateLimitExceeded(err) {
 		slog.Warn("Strava API Rate Limit Exceeded")
 		return nil
 	}
 	return telemetry.Error(span, err)
 }
 
-func getClient(ctx context.Context) (context.Context, *api.Client, error) {
-	ctx, errR := config.Read(ctx, true)
-	cfg, errG := config.Get(ctx)
-	if err := errors.Join(errR, errG); err != nil {
+func getHeartRate(ctx context.Context, client *gogarmin.API, path string) error {
+	ctx, span := telemetry.NewSpan(ctx, "getHRs")
+	defer span.End()
+	all := false
+	if path == "" {
+		return telemetry.Error(span, errors.New("path is empty"))
+	}
+	hrFiles, err := heartRateFiles(path)
+	switch {
+	case err != nil:
+		return err
+	case len(hrFiles) == 0:
+		if _, err = os.Stat(path); os.IsNotExist(err) {
+			if err = os.Mkdir(path, 0750); err != nil {
+				err = fmt.Errorf("mkdir '%s' failed due to %w", path, err)
+				return telemetry.Error(span, err)
+			}
+		}
+		all = true
+	}
+	data, err := garmin.HeartRate(client.UserSummary, all)
+	if err != nil {
+		return err
+	}
+	fname := fmt.Sprintf("%s/hr_%d.json", path, len(hrFiles)+1)
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(fname, jsonData, 0600)
+}
+
+func getDailySteps(ctx context.Context, client *gogarmin.API, path string) error {
+	ctx, span := telemetry.NewSpan(ctx, "getDailySteps")
+	defer span.End()
+	all := false
+	if path == "" {
+		return telemetry.Error(span, errors.New("path is empty"))
+	}
+	stepsFiles, err := stepsFiles(path)
+	switch {
+	case err != nil:
+		return err
+	case len(stepsFiles) == 0:
+		if _, err = os.Stat(path); os.IsNotExist(err) {
+			if err = os.Mkdir(path, 0750); err != nil {
+				err = fmt.Errorf("mkdir '%s' failed due to %w", path, err)
+				return telemetry.Error(span, err)
+			}
+		}
+		all = true
+	}
+	steps, err := garmin.DailySteps(client.UserSummary, all)
+	if err != nil {
+		return err
+	}
+	for idx, val := range steps {
+		fname := fmt.Sprintf("%s/steps_%d.json", path, len(stepsFiles)+idx+1)
+		data, err := json.Marshal(val)
+		if err != nil {
+			return err
+		}
+		if err := os.WriteFile(fname, data, 0600); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func heartRateFiles(path string) ([]string, error) {
+	return filepath.Glob(path + "/hr*.json")
+}
+
+func stepsFiles(path string) ([]string, error) {
+	return filepath.Glob(path + "/steps*.json")
+}
+
+func getStravaClient(ctx context.Context) (context.Context, *strava.Client, error) {
+	ctx, span := telemetry.NewSpan(ctx, "getStravaClient")
+	defer span.End()
+	cfg, err := config.Get(ctx)
+	if err != nil {
 		return ctx, nil, err
 	}
-	strava := cfg.Strava
-	api.ClientId = strava.ClientID
-	api.ClientSecret = strava.ClientSecret
-	client := api.NewClient(strava.AccessToken)
+	stravaCfg := cfg.Strava
+	strava.ClientId = stravaCfg.ClientID
+	strava.ClientSecret = stravaCfg.ClientSecret
+	client := strava.NewClient(stravaCfg.AccessToken)
 	return ctx, client, nil
 }
 
-func fetchBestEfforts(ctx context.Context, client *api.Client, ids []int64, apiCalls int) error {
+func fetchBestEfforts(ctx context.Context, client *strava.Client, ids []int64, apiCalls int) error {
 	ctx, span := telemetry.NewSpan(ctx, "fetchfetchBestEfforts")
 	defer span.End()
 	if len(ids) == 0 {
@@ -90,6 +189,9 @@ func fetchBestEfforts(ctx context.Context, client *api.Client, ids []int64, apiC
 		return err
 	}
 	path := cfg.Strava.Activities
+	if path == "" {
+		return telemetry.Error(span, errors.New("path is empty"))
+	}
 	actFiles, err := activitiesFiles(path)
 	switch {
 	case err != nil:
@@ -97,6 +199,7 @@ func fetchBestEfforts(ctx context.Context, client *api.Client, ids []int64, apiC
 	case len(actFiles) == 0:
 		if _, err = os.Stat(path); os.IsNotExist(err) {
 			if err = os.Mkdir(path, 0750); err != nil {
+				err = fmt.Errorf("mkdir '%s' failed due to %w", path, err)
 				return telemetry.Error(span, err)
 			}
 		}
@@ -107,7 +210,7 @@ func fetchBestEfforts(ctx context.Context, client *api.Client, ids []int64, apiC
 		i, _ := strconv.Atoi(intStr)
 		alreadyFetched = append(alreadyFetched, int64(i))
 	}
-	service := api.NewActivitiesService(ctx, client)
+	service := strava.NewActivitiesService(ctx, client)
 	for idx, id := range ids {
 		if slices.Contains[[]int64, int64](alreadyFetched, id) {
 			continue
@@ -117,9 +220,10 @@ func fetchBestEfforts(ctx context.Context, client *api.Client, ids []int64, apiC
 		} else if data, err := json.Marshal(activity); err != nil {
 			return telemetry.Error(span, err)
 		} else {
-			fname := fmt.Sprintf("%s/activity_%d.json ...\n", path, id)
-			fmt.Printf("%s => %s ...\n", activity.StartDateLocal, fname)
+			fname := fmt.Sprintf("%s/activity_%d.json", path, id)
+			fmt.Printf("%s ==> %s ...\n", activity.StartDateLocal, fname)
 			if err = os.WriteFile(fname, data, 0600); err != nil {
+				log.Fatal(err)
 				return telemetry.Error(span, err)
 			}
 		}
@@ -160,12 +264,13 @@ func getJsonStatus(ctx context.Context) (jsonStatus, error) {
 	case len(fnames) == 0:
 		if _, err = os.Stat(path); os.IsNotExist(err) {
 			if err = os.Mkdir(path, 0750); err != nil {
+
 				return status, telemetry.Error(span, err)
 			}
 		}
 	}
 	status.pages = len(fnames)
-	activities, err := api.ReadSummaryJSONs(fnames)
+	activities, err := strava.ReadSummaryJSONs(fnames)
 	if err != nil {
 		return status, err
 	}
@@ -178,15 +283,15 @@ func getJsonStatus(ctx context.Context) (jsonStatus, error) {
 	return status, nil
 }
 
-func callListActivities(ctx context.Context, client *api.Client, after time.Time) (*api.CurrentAthleteListActivitiesCall, error) {
+func callListActivities(ctx context.Context, client *strava.Client, after time.Time) (*strava.CurrentAthleteListActivitiesCall, error) {
 	_, span := telemetry.NewSpan(ctx, "callListActivities")
 	defer span.End()
-	current := api.NewCurrentAthleteService(client)
+	current := strava.NewCurrentAthleteService(client)
 	call := current.ListActivities()
 	return call.After(int(after.Unix())), nil
 }
 
-func saveActivities(ctx context.Context, call *api.CurrentAthleteListActivitiesCall, prior int) ([]int64, int, error) {
+func saveActivities(ctx context.Context, call *strava.CurrentAthleteListActivitiesCall, prior int) ([]int64, int, error) {
 	_, span := telemetry.NewSpan(ctx, "saveActivities")
 	defer span.End()
 	page := 1
@@ -200,7 +305,7 @@ func saveActivities(ctx context.Context, call *api.CurrentAthleteListActivitiesC
 		call = call.Page(page)
 		activities, err := call.Do()
 		if err != nil {
-			if api.IsRateLimitExceeded(err) {
+			if strava.IsRateLimitExceeded(err) {
 				return newIds, page, telemetry.Error(span, err)
 			}
 			if page == 1 {

@@ -91,7 +91,7 @@ func NewSpan(ctx context.Context, name string) (context.Context, trace.Span) {
 	if value == nil {
 		log.Fatal("Telemetry has not been setup")
 	}
-	return ctx.Value(otelCtxKey).(trace.Tracer).Start(ctx, name)
+	return value.(trace.Tracer).Start(ctx, name)
 }
 
 func Error(span trace.Span, err error) error {

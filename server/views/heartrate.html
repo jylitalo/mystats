@@ -1,0 +1,73 @@
+{{ block "heartrate-tab" . }}
+{{ template "heartrate-form" .Form }}
+<hr />
+{{ template "heartrate-data" .Data }}
+{{ end }}
+
+{{ block "heartrate-form" . }}
+<form hx-swap="outerHTML" hx-target="#heartrate-data" hx-post="/heartrate">
+    <div id="month">
+        <b>Month:</b>
+        <select hx-swap="outerHTML" hx-target="#heartrate-data" hx-post="/heartrate" name="EndMonth">
+            {{ $endMonth := .EndMonth -}}
+            {{ range $m := N 1 13 -}}
+                <option value="{{ $m }}"{{ if eq $m $endMonth }}  SELECTED{{ end }}>{{ month $m }}</option>
+            {{ end }}
+        </select>
+    </div>
+    <div id="day">
+        <b>Day:</b>
+        <select hx-swap="outerHTML" hx-target="#heartrate-data" hx-post="/heartrate" name="EndDay">
+            {{ $endDay := .EndDay -}}
+            {{ range $d := N 1 32 -}}
+                <option value="{{ $d }}"{{ if eq $d $endDay }}  selected{{ end }}>{{ $d }}</option>
+            {{ end }}
+        </select>
+    </div>
+    <div id="heartrate-avg">
+        <b>Average:</b>
+        <select hx-swap="outerHTML" hx-target="#heartrate-data" hx-post="/heartrate" name="Average">
+            {{ $average := .Average -}}
+            {{ range $d := N 0 4 -}}
+                <option value="{{ $d }}"{{ if eq $d $average }}  selected{{ end }}>{{ inc (multiply $d 2) }} days</option>
+            {{ end }}
+        </select>
+    </div>
+    {{ template "years" . }}
+</form>
+{{ end }}
+
+{{ block "heartrate-data" . }}
+<div id="heartrate-data">
+    {{ template "heartrate-plot" . }}
+</div>
+{{ end }}
+
+{{ block "heartrate-plot" . }}
+<div id="heartrate" style="display: flex; flex-direction: column">
+    <script type="text/javascript">
+        google.charts.setOnLoadCallback(hrDrawLineColors);
+        function hrDrawLineColors() {
+            var data = new google.visualization.DataTable();
+            var options = {
+                height: 750,
+                width: '100%',
+                hAxis: { title: 'days', format: 'MMM dd' },
+                vAxis: { title: 'Daily heartrate (bpm)' },
+                colors: {{ .ScriptColors }}
+            };
+
+            data.addColumn('date', 'X');
+            {{ range $year := .ScriptColumns -}}
+            data.addColumn('number', '{{$year}}');
+            {{ end }}
+            data.addRows({{ .ScriptRows }});
+            var formatter = new google.visualization.DateFormat({pattern: 'MMM dd'});
+            formatter.format(data, 0);
+            var chart = new google.visualization.LineChart(document.getElementById('heartrate_div'));
+            chart.draw(data, options);
+        };
+    </script>
+    <div class="chart" id="heartrate_div"></div>
+</div>
+{{ end }}

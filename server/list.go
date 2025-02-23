@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strconv"
+	"time"
 
 	"github.com/jylitalo/mystats/pkg/stats"
 	"github.com/jylitalo/mystats/pkg/telemetry"
@@ -14,20 +15,28 @@ import (
 )
 
 type ListFormData struct {
-	Name         string
-	Types        map[string]bool
-	WorkoutTypes map[string]bool
-	Years        map[int]bool
-	Limit        int
+	Name     string
+	Sports   map[string]bool
+	Workouts map[string]bool
+	Years    map[int]bool
+	Limit    int
 }
 
-func newListFormData() ListFormData {
+func newListFormData(years []int, sports, workouts map[string]bool) ListFormData {
+	yearSelection := map[int]bool{}
+	currentYear := time.Now().Year()
+	for _, y := range years {
+		yearSelection[y] = false
+	}
+	if _, ok := yearSelection[currentYear]; ok {
+		yearSelection[currentYear] = true
+	}
 	return ListFormData{
-		Name:         "list",
-		Types:        map[string]bool{},
-		WorkoutTypes: map[string]bool{},
-		Years:        map[int]bool{},
-		Limit:        1000,
+		Name:     "list",
+		Sports:   sports,
+		Workouts: workouts,
+		Years:    yearSelection,
+		Limit:    1000,
 	}
 }
 
@@ -37,24 +46,39 @@ type ListEventData struct {
 	TableData
 }
 
+type listStatsFn func(ctx context.Context, db stats.Storage, sports, workouts []string, years []int, limit int, name string) ([]string, [][]string, error)
+
 type ListPage struct {
 	Form  ListFormData
 	Data  TableData
 	Event ListEventData
+	stats listStatsFn
 }
 
-func newListPage() *ListPage {
+func newListPage(ctx context.Context, db Storage, years []int, sports, workouts map[string]bool, stats listStatsFn) (*ListPage, error) {
+	var err error
+
+	form := newListFormData(years, sports, workouts)
+	data := newTableData()
+	data.Headers, data.Rows, err = stats(
+		ctx, db, selectedSports(sports), selectedWorkouts(workouts),
+		selectedYears(form.Years), form.Limit, "",
+	)
+	if err != nil {
+		return nil, err
+	}
 	return &ListPage{
-		Form: newListFormData(),
-		Data: newTableData(),
+		Form: form,
+		Data: data,
 		Event: ListEventData{
 			Name:      "",
 			TableData: newTableData(),
 		},
-	}
+		stats: stats,
+	}, err
 }
 
-func listPost(ctx context.Context, page *Page, db Storage) func(c echo.Context) error {
+func listPost(ctx context.Context, page *ListPage, db Storage) func(c echo.Context) error {
 	return func(c echo.Context) error {
 		var err error
 
@@ -62,8 +86,8 @@ func listPost(ctx context.Context, page *Page, db Storage) func(c echo.Context) 
 		defer span.End()
 
 		values, errV := c.FormParams()
-		types, errT := typeValues(values)
-		workoutTypes, errW := workoutTypeValues(values)
+		sports, errT := sportsValues(values)
+		workouts, errW := workoutsValues(values)
 		years, errY := yearValues(values)
 		limit, errL := strconv.Atoi(c.FormValue("limit"))
 		name := c.FormValue("name")
@@ -72,15 +96,16 @@ func listPost(ctx context.Context, page *Page, db Storage) func(c echo.Context) 
 			_ = telemetry.Error(span, err)
 		}
 		slog.Info("POST /list", "values", values)
-		page.List.Form.Years = years
-		page.List.Data.Headers, page.List.Data.Rows, err = stats.List(
-			ctx, db, selectedTypes(types), selectedWorkoutTypes(workoutTypes), selectedYears(years), limit, name,
+		page.Form.Years = years
+		page.Data.Headers, page.Data.Rows, err = page.stats(
+			ctx, db, selectedSports(sports), selectedWorkouts(workouts),
+			selectedYears(years), limit, name,
 		)
-		return telemetry.Error(span, errors.Join(err, c.Render(200, "list-data", page.List.Data)))
+		return telemetry.Error(span, errors.Join(err, c.Render(200, "list-data", page.Data)))
 	}
 }
 
-func listEvent(ctx context.Context, page *Page, db Storage) func(c echo.Context) error {
+func listEvent(ctx context.Context, page *ListPage, db Storage) func(c echo.Context) error {
 	return func(c echo.Context) error {
 		ctx, span := telemetry.NewSpan(ctx, "eventPOST")
 		defer span.End()
@@ -89,7 +114,11 @@ func listEvent(ctx context.Context, page *Page, db Storage) func(c echo.Context)
 		if err != nil {
 			return telemetry.Error(span, err)
 		}
-		rows, err := db.QuerySummary([]string{"name", "year", "month", "day"}, storage.SummaryConditions{StravaID: int64(id)}, nil)
+		rows, err := db.Query(
+			[]string{"name", "year", "month", "day"},
+			storage.WithTable(storage.SummaryTable),
+			storage.WithStravaID(int64(id)),
+		)
 		if err != nil {
 			return telemetry.Error(span, err)
 		}
@@ -98,11 +127,11 @@ func listEvent(ctx context.Context, page *Page, db Storage) func(c echo.Context)
 			return fmt.Errorf("listEvent was unable to find activity %d", id)
 		}
 		var year, month, day int
-		if err = rows.Scan(&page.List.Event.Name, &year, &month, &day); err != nil {
+		if err = rows.Scan(&page.Event.Name, &year, &month, &day); err != nil {
 			return telemetry.Error(span, err)
 		}
-		page.List.Event.Date = fmt.Sprintf("%d.%d.%d", day, month, year)
-		page.List.Event.Headers, page.List.Event.Rows, err = stats.Split(ctx, db, int64(id))
-		return errors.Join(err, c.Render(200, "list-event", page.List.Event))
+		page.Event.Date = fmt.Sprintf("%d.%d.%d", day, month, year)
+		page.Event.Headers, page.Event.Rows, err = stats.Split(ctx, db, int64(id))
+		return errors.Join(err, c.Render(200, "list-event", page.Event))
 	}
 }

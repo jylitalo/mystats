@@ -10,7 +10,7 @@ import (
 	"github.com/jylitalo/mystats/storage"
 )
 
-func Top(ctx context.Context, db Storage, measure, period string, types, workoutTypes []string, limit int, years []int) ([]string, [][]string, error) {
+func Top(ctx context.Context, db Storage, measure, period string, sports, workouts []string, limit int, years []int) ([]string, [][]string, error) {
 	_, span := telemetry.NewSpan(ctx, "stats.Top")
 	defer span.End()
 
@@ -35,14 +35,24 @@ func Top(ctx context.Context, db Storage, measure, period string, types, workout
 		p = "day"
 	}
 	results := [][]string{}
-	rows, err := db.QuerySummary(
-		[]string{m + " as total", "year", p},
-		storage.SummaryConditions{Types: types, WorkoutTypes: workoutTypes, Years: years},
-		&storage.Order{
+	opts := []storage.QueryOption{
+		storage.WithOrder(storage.OrderConfig{
 			GroupBy: []string{"year", p},
 			OrderBy: []string{"total desc", "year desc", p + " desc"},
-			Limit:   limit},
-	)
+			Limit:   limit,
+		}),
+		storage.WithTable(storage.SummaryTable),
+	}
+	for _, s := range sports {
+		opts = append(opts, storage.WithSport(s))
+	}
+	for _, w := range workouts {
+		opts = append(opts, storage.WithWorkout(w))
+	}
+	for _, y := range years {
+		opts = append(opts, storage.WithYear(y))
+	}
+	rows, err := db.Query([]string{m + " as total", "year", p}, opts...)
 	if err != nil {
 		return nil, nil, telemetry.Error(span, fmt.Errorf("select caused: %w", err))
 	}

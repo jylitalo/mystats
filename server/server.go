@@ -6,6 +6,7 @@ import (
 	"errors"
 	"html/template"
 	"io"
+	"maps"
 	"net/url"
 	"slices"
 	"strconv"
@@ -21,13 +22,11 @@ import (
 )
 
 type Storage interface {
-	QueryBestEffort(fields []string, name string, order *storage.Order) (*sql.Rows, error)
 	QueryBestEffortDistances() ([]string, error)
-	QuerySplit(fields []string, id int64) (*sql.Rows, error)
-	QuerySummary(fields []string, cond storage.SummaryConditions, order *storage.Order) (*sql.Rows, error)
-	QueryTypes(cond storage.SummaryConditions) ([]string, error)
-	QueryWorkoutTypes(cond storage.SummaryConditions) ([]string, error)
-	QueryYears(cond storage.SummaryConditions) ([]int, error)
+	QuerySports() ([]string, error)
+	QueryWorkouts() ([]string, error)
+	QueryYears(opts ...storage.QueryOption) ([]int, error)
+	Query(fields []string, opts ...storage.QueryOption) (*sql.Rows, error)
 }
 
 type TableData struct {
@@ -43,19 +42,79 @@ func newTableData() TableData {
 }
 
 type Page struct {
-	Plot *PlotPage
-	Best *BestPage
-	List *ListPage
-	Top  *TopPage
+	Best      *BestPage
+	HeartRate *HeartRatePage
+	List      *ListPage
+	Plot      *PlotPage
+	Steps     *StepsPage
+	Top       *TopPage
 }
 
-func newPage() *Page {
-	return &Page{
-		Plot: newPlotPage(),
-		Best: newBestPage(),
-		List: newListPage(),
-		Top:  newTopPage(),
+type pageConfig struct {
+	bestStats  bestStatsFn
+	listStats  listStatsFn
+	plotStats  plotStatsFn
+	stepsStats stepStatsFn
+	topStats   topStatsFn
+	sports     []string
+}
+type pageOptions func(po *pageConfig)
+
+func newPage(ctx context.Context, db Storage, opts ...pageOptions) (*Page, error) {
+	ctx, span := telemetry.NewSpan(ctx, "server.newPage")
+	defer span.End()
+	allSports, err := db.QuerySports()
+	if err != nil {
+		return nil, telemetry.Error(span, err)
 	}
+	sports := map[string]bool{}
+	for _, s := range allSports {
+		sports[s] = false
+	}
+	cfg := pageConfig{
+		bestStats:  stats.Best,
+		listStats:  stats.List,
+		plotStats:  stats.Stats,
+		stepsStats: stepsStats,
+		topStats:   stats.Top,
+		sports:     allSports,
+	}
+	for _, o := range opts {
+		o(&cfg)
+	}
+	for _, t := range cfg.sports {
+		if _, ok := sports[t]; ok {
+			sports[t] = true
+		}
+	}
+	workoutTypes, errW := db.QueryWorkouts()
+	selectedWT := map[string]bool{}
+	for _, wt := range workoutTypes {
+		selectedWT[wt] = true
+	}
+	dailyStepsYears, errDS := db.QueryYears(storage.WithTable(storage.DailyStepsTable))
+	heartRateYears, errHR := db.QueryYears(storage.WithTable(storage.HeartRateTable))
+	if err := errors.Join(errDS, errHR); err != nil {
+		return nil, err
+	}
+	stravaYears, errS := db.QueryYears()
+	be, errBE := newBestPage(ctx, db, cfg.bestStats)
+	hr, errHR := newHeartRatePage(ctx, db, heartRateYears)
+	steps, errS := newStepsPage(ctx, db, dailyStepsYears, cfg.stepsStats)
+	list, errL := newListPage(ctx, db, stravaYears, maps.Clone(sports), maps.Clone(selectedWT), cfg.listStats)
+	plot, errP := newPlotPage(ctx, db, stravaYears, maps.Clone(sports), maps.Clone(selectedWT), cfg.plotStats)
+	top, errTop := newTopPage(ctx, db, stravaYears, maps.Clone(sports), maps.Clone(selectedWT), cfg.topStats)
+	if err := errors.Join(errW, errS, errBE, errHR, errL, errP, errS, errTop); err != nil {
+		return nil, err
+	}
+	return &Page{
+		Best:      be,
+		HeartRate: hr,
+		List:      list,
+		Plot:      plot,
+		Steps:     steps,
+		Top:       top,
+	}, nil
 }
 
 type Template struct {
@@ -89,6 +148,9 @@ func newTemplate(path string) *Template {
 		"month": func(i int) time.Month {
 			return time.Month(i)
 		},
+		"multiply": func(i, j int) int {
+			return i * j
+		},
 	}
 	return &Template{
 		tmpl: template.Must(template.New("index").Funcs(funcMap).ParseGlob(path)),
@@ -99,9 +161,9 @@ func (t *Template) Render(w io.Writer, name string, data interface{}, c echo.Con
 	return t.tmpl.ExecuteTemplate(w, name, data)
 }
 
-func selectedTypes(types map[string]bool) []string {
+func selectedSports(sports map[string]bool) []string {
 	checked := []string{}
-	for k, v := range types {
+	for k, v := range sports {
 		if v {
 			checked = append(checked, k)
 		}
@@ -109,9 +171,9 @@ func selectedTypes(types map[string]bool) []string {
 	return checked
 }
 
-func selectedWorkoutTypes(types map[string]bool) []string {
+func selectedWorkouts(workouts map[string]bool) []string {
 	checked := []string{}
-	for k, v := range types {
+	for k, v := range workouts {
 		if v {
 			checked = append(checked, k)
 		}
@@ -130,32 +192,32 @@ func selectedYears(years map[int]bool) []int {
 	return checked
 }
 
-func typeValues(values url.Values) (map[string]bool, error) {
+func sportsValues(values url.Values) (map[string]bool, error) {
 	if values == nil {
 		return nil, errors.New("no type values given")
 	}
-	types := map[string]bool{}
+	sports := map[string]bool{}
 	for k, v := range values {
-		if strings.HasPrefix(k, "type_") {
-			tv := strings.ReplaceAll(k[5:], "_", " ")
-			types[tv] = (len(tv) > 0 && v[0] == "on")
+		if strings.HasPrefix(k, "sport_") {
+			tv := strings.ReplaceAll(k[6:], "_", " ")
+			sports[tv] = (len(tv) > 0 && v[0] == "on")
 		}
 	}
-	return types, nil
+	return sports, nil
 }
 
-func workoutTypeValues(values url.Values) (map[string]bool, error) {
+func workoutsValues(values url.Values) (map[string]bool, error) {
 	if values == nil {
 		return nil, errors.New("no workoutType values given")
 	}
-	types := map[string]bool{}
+	sports := map[string]bool{}
 	for k, v := range values {
 		if strings.HasPrefix(k, "wt_") {
 			tv := strings.ReplaceAll(k[3:], "_", " ")
-			types[tv] = (len(tv) > 0 && v[0] == "on")
+			sports[tv] = (len(tv) > 0 && v[0] == "on")
 		}
 	}
-	return types, nil
+	return sports, nil
 }
 
 func yearValues(values url.Values) (map[int]bool, error) {
@@ -176,91 +238,34 @@ func yearValues(values url.Values) (map[int]bool, error) {
 	return years, nil
 }
 
-func Start(ctx context.Context, db Storage, selectedTypes []string, port int) error {
-	_, span := telemetry.NewSpan(ctx, "server.start")
+func Start(ctx context.Context, db Storage, sports []string, port int) error {
+	ctx, span := telemetry.NewSpan(ctx, "server.start")
+	defer span.End()
 	e := echo.New()
 	e.Renderer = newTemplate("server/views/*.html")
 	e.Use(middleware.Logger())
 	e.Static("/css", "server/css")
 
-	page := newPage()
-	types, errT := db.QueryTypes(storage.SummaryConditions{})
-	workoutTypes, errW := db.QueryWorkoutTypes(storage.SummaryConditions{})
-	years, errY := db.QueryYears(storage.SummaryConditions{})
-	bestEfforts, errBE := db.QueryBestEffortDistances()
-	if err := errors.Join(errT, errW, errY, errBE); err != nil {
-		return telemetry.Error(span, err)
+	page, err := newPage(ctx, db, func(pc *pageConfig) { pc.sports = sports })
+	if err != nil {
+		return err
 	}
-	// it is faster to first mark everything false and afterwards change selected one to true,
-	// instead of going through all types and checking on every type, if it is contained in selectedTypes or not.
-	for _, t := range types {
-		page.List.Form.Types[t] = false
-		page.Plot.Form.Types[t] = false
-		page.Top.Form.Types[t] = false
-	}
-	for _, t := range selectedTypes {
-		page.List.Form.Types[t] = true
-		page.Plot.Form.Types[t] = true
-		page.Top.Form.Types[t] = true
-	}
-	for _, t := range workoutTypes {
-		page.List.Form.WorkoutTypes[t] = true
-		page.Plot.Form.WorkoutTypes[t] = true
-		page.Top.Form.WorkoutTypes[t] = true
-	}
-	currentYear := time.Now().Year()
-	for _, y := range years {
-		page.List.Form.Years[y] = y == currentYear
-		page.Plot.Form.Years[y] = true
-		page.Top.Form.Years[y] = true
-	}
-	value := true
-	page.Best.Form.InOrder = bestEfforts
-	for _, be := range bestEfforts {
-		page.Best.Form.Distances[be] = value
-		value = false
-	}
-	span.End()
-
-	e.GET("/", indexGet(ctx, page, db))
-	e.POST("/best", bestPost(ctx, page, db))
-	e.POST("/event", listEvent(ctx, page, db))
-	e.POST("/list", listPost(ctx, page, db))
-	e.POST("/plot", plotPost(ctx, page, db))
-	e.POST("/top", topPost(ctx, page, db))
+	e.GET("/", indexGet(ctx, page))
+	e.POST("/best", bestPost(ctx, page.Best, db))
+	e.POST("/event", listEvent(ctx, page.List, db))
+	e.POST("/heartrate", heartRatePost(ctx, page.HeartRate, db))
+	e.POST("/list", listPost(ctx, page.List, db))
+	e.POST("/plot", plotPost(ctx, page.Plot, db))
+	e.POST("/top", topPost(ctx, page.Top, db))
+	e.POST("/steps", stepsPost(ctx, page.Steps, db))
 	e.Logger.Fatal(e.Start(":" + strconv.FormatInt(int64(port), 10)))
 	return nil
 }
 
-func indexGet(ctx context.Context, page *Page, db Storage) func(c echo.Context) error {
+func indexGet(ctx context.Context, page *Page) func(c echo.Context) error {
 	return func(c echo.Context) error {
-		var errL, errT error
-
-		ctx, span := telemetry.NewSpan(ctx, "indexGET")
+		_, span := telemetry.NewSpan(ctx, "indexGET")
 		defer span.End()
-		pf := &page.Plot.Form
-		errP := page.Plot.render(
-			ctx, db, pf.Types, pf.WorkoutTypes, pf.EndMonth, pf.EndDay, pf.Years, pf.Period,
-		)
-		// init List tab
-		types := selectedTypes(pf.Types)
-		workoutTypes := selectedWorkoutTypes(pf.WorkoutTypes)
-		years := selectedYears(pf.Years)
-		plfYears := selectedYears(page.List.Form.Years)
-		pld := &page.List.Data
-		pld.Headers, pld.Rows, errL = stats.List(ctx, db, types, workoutTypes, plfYears, page.List.Form.Limit, "")
-		// init Top tab
-		tf := &page.Top.Form
-		td := &page.Top.Data
-		td.Headers, td.Rows, errT = stats.Top(ctx, db, tf.Measure, tf.Period, types, workoutTypes, tf.Limit, years)
-		// init Best tab
-		for _, be := range selectedBestEfforts(page.Best.Form.Distances) {
-			if headers, rows, err := stats.Best(ctx, db, be, 10); err != nil {
-				return telemetry.Error(span, err)
-			} else {
-				page.Best.Data.Data = append(page.Best.Data.Data, TableData{Headers: headers, Rows: rows})
-			}
-		}
-		return telemetry.Error(span, errors.Join(errP, errL, errT, c.Render(200, "index", page)))
+		return telemetry.Error(span, c.Render(200, "index", page))
 	}
 }

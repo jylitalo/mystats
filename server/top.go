@@ -17,75 +17,94 @@ type TopFormData struct {
 	MeasureOptions []string
 	Period         string
 	PeriodOptions  []string
-	Types          map[string]bool
-	WorkoutTypes   map[string]bool
+	Sports         map[string]bool
+	Workouts       map[string]bool
 	Years          map[int]bool
 	Limit          int
 }
 
-func newTopFormData() TopFormData {
+func newTopFormData(years []int, sports, workouts map[string]bool) TopFormData {
+	yearSelection := map[int]bool{}
+	for _, y := range years {
+		yearSelection[y] = true
+	}
 	return TopFormData{
 		Name:           "top",
 		Measure:        "distance",
 		MeasureOptions: []string{"distance", "elevation", "time"},
 		Period:         "week",
 		PeriodOptions:  []string{"week", "month"},
-		Types:          map[string]bool{},
-		WorkoutTypes:   map[string]bool{},
-		Years:          map[int]bool{},
+		Sports:         sports,
+		Workouts:       workouts,
+		Years:          yearSelection,
 		Limit:          10,
 	}
 }
 
+type topStatsFn func(
+	ctx context.Context, db stats.Storage, measure, period string, sports, workouts []string,
+	limit int, years []int,
+) ([]string, [][]string, error)
+
 type TopData struct {
 	Measure string
 	Period  string
+	stats   topStatsFn
 	TableData
+}
+
+func newTopData(ctx context.Context, db Storage, measure, period string, sports, workouts []string, limit int, years []int, stats topStatsFn) (*TopData, error) {
+	var err error
+	data := &TopData{
+		Measure: measure,
+		Period:  period,
+		stats:   stats,
+	}
+	data.Headers, data.Rows, err = data.stats(ctx, db, measure, period, sports, workouts, limit, years)
+	return data, err
 }
 
 type TopPage struct {
 	Form TopFormData
-	Data TopData
+	Data *TopData
 }
 
-func newTopPage() *TopPage {
-	return &TopPage{
-		Form: newTopFormData(),
-		Data: TopData{
-			Measure:   "distance",
-			Period:    "week",
-			TableData: newTableData(),
-		},
-	}
+func newTopPage(ctx context.Context, db Storage, years []int, sports, workouts map[string]bool, stats topStatsFn) (*TopPage, error) {
+	form := newTopFormData(years, sports, workouts)
+	data, err := newTopData(
+		ctx, db, form.Measure, form.Period, selectedSports(sports),
+		selectedWorkouts(workouts), form.Limit, years, stats,
+	)
+	return &TopPage{Form: form, Data: data}, err
 }
 
-func topPost(ctx context.Context, page *Page, db Storage) func(c echo.Context) error {
+func topPost(ctx context.Context, page *TopPage, db Storage) func(c echo.Context) error {
 	return func(c echo.Context) error {
-		var err error
+		var err, errL, errS, errW, errY error
 
 		ctx, span := telemetry.NewSpan(ctx, "topPOST")
 		defer span.End()
-		values, errV := c.FormParams()
-		types, errT := typeValues(values)
-		workoutTypes, errW := workoutTypeValues(values)
-		years, errY := yearValues(values)
-		limit, errL := strconv.Atoi(c.FormValue("limit"))
-		page.Top.Data.Measure = c.FormValue("Measure")
-		page.Top.Form.Measure = page.Top.Data.Measure
-		page.Top.Data.Period = c.FormValue("Period")
-		page.Top.Form.Period = page.Top.Data.Period
-		if err = errors.Join(errV, errT, errW, errY, errL); err != nil {
+		values, err := c.FormParams()
+		slog.Info("POST /top", "values", values)
+		page.Form.Sports, errS = sportsValues(values)
+		page.Form.Workouts, errW = workoutsValues(values)
+		page.Form.Years, errY = yearValues(values)
+		page.Form.Limit, errL = strconv.Atoi(c.FormValue("limit"))
+		if err = errors.Join(err, errS, errW, errY, errL); err != nil {
 			return telemetry.Error(span, err)
 		}
-		page.Top.Form.Limit = limit
-		slog.Info("POST /top", "values", values)
-		tf := &page.Top.Form
-		tf.Years = years
-		td := &page.Top.Data
-		td.Headers, td.Rows, err = stats.Top(
-			ctx, db, tf.Measure, tf.Period, selectedTypes(types),
-			selectedWorkoutTypes(workoutTypes), tf.Limit, selectedYears(years),
+		page.Form.Measure = c.FormValue("Measure")
+		page.Form.Period = c.FormValue("Period")
+		page.Data, err = newTopData(
+			ctx, db, page.Form.Measure, page.Form.Period,
+			selectedSports(page.Form.Sports),
+			selectedWorkouts(page.Form.Workouts), page.Form.Limit,
+			selectedYears(page.Form.Years),
+			page.Data.stats,
 		)
-		return telemetry.Error(span, errors.Join(err, c.Render(200, "top-data", td)))
+		if err != nil {
+			return telemetry.Error(span, err)
+		}
+		return telemetry.Error(span, errors.Join(err, c.Render(200, "top-data", page.Data)))
 	}
 }
