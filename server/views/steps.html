@@ -49,6 +49,7 @@
 <div id="steps" style="display: flex; flex-direction: column">
     <script type="text/javascript">
         google.charts.setOnLoadCallback(stepsDrawLineColors);
+        resizeList.push(stepsDrawLineColors);
         function stepsDrawLineColors() {
             var data = new google.visualization.DataTable();
             var options = {

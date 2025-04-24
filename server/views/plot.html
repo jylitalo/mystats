@@ -60,6 +60,7 @@
 <div id="plot" style="display: flex; flex-direction: column">
     <script type="text/javascript">
         google.charts.setOnLoadCallback(plotDrawLineColors);
+        resizeList.push(plotDrawLineColors);
         function plotDrawLineColors() {
             var data = new google.visualization.DataTable();
             var options = {

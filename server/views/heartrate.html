@@ -47,6 +47,7 @@
 <div id="heartrate" style="display: flex; flex-direction: column">
     <script type="text/javascript">
         google.charts.setOnLoadCallback(hrDrawLineColors);
+        resizeList.push(hrDrawLineColors);
         function hrDrawLineColors() {
             var data = new google.visualization.DataTable();
             var options = {
