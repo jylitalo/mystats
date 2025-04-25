@@ -325,7 +325,6 @@ func (sq *Sqlite3) InsertDailySteps(ctx context.Context, records map[string]garm
 func (sq *Sqlite3) InsertHeartRate(ctx context.Context, records map[string]garmin.HeartRateStat) error {
 	_, span := telemetry.NewSpan(ctx, "InsertHeartRate")
 	defer span.End()
-	slog.Info("storage.InsertHeartRate", "records", records)
 	if sq.db == nil {
 		return telemetry.Error(span, errors.New("database is nil"))
 	}

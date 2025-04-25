@@ -12,6 +12,12 @@
     <body>
         <script type="text/javascript">
             google.charts.load('current', {'packages':['corechart', 'line']});
+            var resizeList = [];
+            function resize () {
+                resizeList.forEach(element => { element() });
+            };
+            window.onload = resize;
+            window.onresize = resize;
         </script>
         {{ $best := "Best" -}}
         {{ $hr := "HR" -}}
@@ -65,6 +71,15 @@
               // Show the current tab, and add an "active" class to the button that opened the tab
               document.getElementById(tabName).style.display = "block";
               evt.currentTarget.className += " active";
+              if (tabName == "{{ $plot }}") {
+                plotDrawLineColors();
+              }
+              if (tabName == "{{ $steps }}") {
+                stepsDrawLineColors();
+              }
+              if (tabName == "{{ $hr }}") {
+                hrDrawLineColors();
+              }
             }
             document.getElementById("defaultOpen").click();
         </script>
