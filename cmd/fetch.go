@@ -88,7 +88,7 @@ func fetch(ctx context.Context, best_efforts bool) error {
 }
 
 func getHeartRate(ctx context.Context, client *gogarmin.API, path string) error {
-	ctx, span := telemetry.NewSpan(ctx, "getHRs")
+	_, span := telemetry.NewSpan(ctx, "getHRs")
 	defer span.End()
 	all := false
 	if path == "" {
@@ -120,7 +120,7 @@ func getHeartRate(ctx context.Context, client *gogarmin.API, path string) error 
 }
 
 func getDailySteps(ctx context.Context, client *gogarmin.API, path string) error {
-	ctx, span := telemetry.NewSpan(ctx, "getDailySteps")
+	_, span := telemetry.NewSpan(ctx, "getDailySteps")
 	defer span.End()
 	all := false
 	if path == "" {
@@ -212,7 +212,7 @@ func fetchBestEfforts(ctx context.Context, client *strava.Client, ids []int64, a
 	}
 	service := strava.NewActivitiesService(ctx, client)
 	for idx, id := range ids {
-		if slices.Contains[[]int64, int64](alreadyFetched, id) {
+		if slices.Contains(alreadyFetched, id) {
 			continue
 		}
 		if activity, err := service.Get(id).Do(); err != nil {

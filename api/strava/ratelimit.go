@@ -49,8 +49,8 @@ func (rl *RateLimit) FractionReached() float32 {
 	rl.lock.RLock()
 	defer rl.lock.RUnlock()
 
-	var shortLimitFraction float32 = float32(rl.UsageShort) / float32(rl.LimitShort)
-	var longLimitFraction float32 = float32(rl.UsageLong) / float32(rl.LimitLong)
+	var shortLimitFraction = float32(rl.UsageShort) / float32(rl.LimitShort)
+	var longLimitFraction = float32(rl.UsageLong) / float32(rl.LimitLong)
 
 	if shortLimitFraction > longLimitFraction {
 		return shortLimitFraction

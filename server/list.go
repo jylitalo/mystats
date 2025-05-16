@@ -122,7 +122,7 @@ func listEvent(ctx context.Context, page *ListPage, db Storage) func(c echo.Cont
 		if err != nil {
 			return telemetry.Error(span, err)
 		}
-		defer rows.Close()
+		defer func() { _ = rows.Close() }()
 		if !rows.Next() {
 			return fmt.Errorf("listEvent was unable to find activity %d", id)
 		}

@@ -32,7 +32,7 @@ func bestCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer db.Close()
+			defer func() { _ = db.Close() }()
 			headers, results, err := stats.Best(ctx, db, distance, limit)
 			if err != nil {
 				return err

@@ -39,7 +39,7 @@ func makeCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer db.Close()
+			defer func() { _ = db.Close() }()
 			return err
 		},
 	}
@@ -126,9 +126,9 @@ func makeDB(ctx context.Context, update bool) (Storage, error) {
 			for _, be := range activity.BestEfforts {
 				dbEfforts = append(dbEfforts, storage.BestEffortRecord{
 					StravaID:    id,
-					Name:        be.EffortSummary.Name,
-					MovingTime:  be.EffortSummary.MovingTime,
-					ElapsedTime: be.EffortSummary.ElapsedTime,
+					Name:        be.Name,
+					MovingTime:  be.MovingTime,
+					ElapsedTime: be.ElapsedTime,
 					Distance:    int(be.Distance),
 				})
 			}

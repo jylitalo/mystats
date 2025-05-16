@@ -56,7 +56,7 @@ func Top(ctx context.Context, db Storage, measure, period string, sports, workou
 	if err != nil {
 		return nil, nil, telemetry.Error(span, fmt.Errorf("select caused: %w", err))
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var year, periodValue int
 		var measureValue float64

@@ -97,14 +97,14 @@ func newPage(ctx context.Context, db Storage, opts ...pageOptions) (*Page, error
 	if err := errors.Join(errDS, errHR); err != nil {
 		return nil, err
 	}
-	stravaYears, errS := db.QueryYears()
+	stravaYears, errStr := db.QueryYears()
 	be, errBE := newBestPage(ctx, db, cfg.bestStats)
 	hr, errHR := newHeartRatePage(ctx, db, heartRateYears)
-	steps, errS := newStepsPage(ctx, db, dailyStepsYears, cfg.stepsStats)
+	steps, errSte := newStepsPage(ctx, db, dailyStepsYears, cfg.stepsStats)
 	list, errL := newListPage(ctx, db, stravaYears, maps.Clone(sports), maps.Clone(selectedWT), cfg.listStats)
 	plot, errP := newPlotPage(ctx, db, stravaYears, maps.Clone(sports), maps.Clone(selectedWT), cfg.plotStats)
 	top, errTop := newTopPage(ctx, db, stravaYears, maps.Clone(sports), maps.Clone(selectedWT), cfg.topStats)
-	if err := errors.Join(errW, errS, errBE, errHR, errL, errP, errS, errTop); err != nil {
+	if err := errors.Join(errW, errStr, errBE, errHR, errSte, errL, errP, errTop); err != nil {
 		return nil, err
 	}
 	return &Page{

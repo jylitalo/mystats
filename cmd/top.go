@@ -61,7 +61,7 @@ func topCmd(types []string) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer db.Close()
+			defer func() { _ = db.Close() }()
 			headers, results, err := stats.Top(ctx, db, measurement, period, types, nil, limit, nil)
 			if err != nil {
 				return err

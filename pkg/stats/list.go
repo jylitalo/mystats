@@ -37,7 +37,7 @@ func List(ctx context.Context, db Storage, sports, workouts []string, years []in
 	if rows == nil || err != nil {
 		return nil, nil, telemetry.Error(span, fmt.Errorf("query caused: %w", err))
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	results := [][]string{}
 	for rows.Next() {
 		var year, month, day, elapsedTime, stravaID int
@@ -76,7 +76,7 @@ func Split(ctx context.Context, db Storage, id int64) ([]string, [][]string, err
 	if err != nil {
 		return nil, nil, telemetry.Error(span, fmt.Errorf("query caused: %w", err))
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	results := [][]string{}
 	for rows.Next() {
 		var split, elapsedTime int

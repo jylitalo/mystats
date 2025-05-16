@@ -81,7 +81,7 @@ func statsCmd(types []string) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer db.Close()
+			defer func() { _ = db.Close() }()
 			years, results, totals, err := stats.Stats(ctx, db, measurement, period, types, nil, month, day, nil)
 			if err != nil {
 				return err

@@ -223,11 +223,11 @@ func (sq *Sqlite3) InsertSummary(ctx context.Context, records []SummaryRecord) e
 		"Distance", "Elevation", "ElapsedTime", "MovingTime",
 	}
 	q := strings.Repeat("?,", len(fields)-1) + "?"
-	stmt, err := tx.Prepare("insert into " + SummaryTable + "(" + strings.Join(fields, ",") + ") values (" + q + ")")
+	stmt, err := tx.Prepare("insert into " + SummaryTable + "(" + strings.Join(fields, ",") + ") values (" + q + ")") // #nosec G202
 	if err != nil {
 		return telemetry.Error(span, fmt.Errorf("InsertSummary caused %w", err))
 	}
-	defer stmt.Close()
+	defer func() { _ = stmt.Close() }()
 	for _, r := range records {
 		_, err = stmt.Exec(
 			r.Year, r.Month, r.Day, r.Week, r.StravaID,
@@ -253,11 +253,11 @@ func (sq *Sqlite3) InsertBestEffort(ctx context.Context, records []BestEffortRec
 	}
 	fields := []string{"StravaID", "Name", "ElapsedTime", "MovingTime", "Distance"}
 	q := strings.Repeat("?,", len(fields)-1) + "?"
-	stmt, err := tx.Prepare("insert into " + BestEffortTable + "(" + strings.Join(fields, ",") + ") values (" + q + ")")
+	stmt, err := tx.Prepare("insert into " + BestEffortTable + "(" + strings.Join(fields, ",") + ") values (" + q + ")") // #nosec G202
 	if err != nil {
 		return telemetry.Error(span, fmt.Errorf("InsertBestEffort caused %w", err))
 	}
-	defer stmt.Close()
+	defer func() { _ = stmt.Close() }()
 	for _, r := range records {
 		if _, err = stmt.Exec(r.StravaID, r.Name, r.ElapsedTime, r.MovingTime, r.Distance); err != nil {
 			return telemetry.Error(span, fmt.Errorf("InsertBestEffort statement execution caused: %w", err))
@@ -278,11 +278,11 @@ func (sq *Sqlite3) InsertSplit(ctx context.Context, records []SplitRecord) error
 	}
 	fields := []string{"StravaID", "Split", "ElapsedTime", "MovingTime", "Distance", "ElevationDiff"}
 	q := strings.Repeat("?,", len(fields)-1) + "?"
-	stmt, err := tx.Prepare("insert into " + SplitTable + "(" + strings.Join(fields, ",") + ") values (" + q + ")")
+	stmt, err := tx.Prepare("insert into " + SplitTable + "(" + strings.Join(fields, ",") + ") values (" + q + ")") // #nosec G202
 	if err != nil {
 		return telemetry.Error(span, fmt.Errorf("InsertSplit caused %w", err))
 	}
-	defer stmt.Close()
+	defer func() { _ = stmt.Close() }()
 	for _, r := range records {
 		if _, err = stmt.Exec(r.StravaID, r.Split, r.ElapsedTime, r.MovingTime, r.Distance, r.ElevationDiff); err != nil {
 			return telemetry.Error(span, fmt.Errorf("InsertSplit statement execution caused: %w", err))
@@ -304,7 +304,7 @@ func (sq *Sqlite3) InsertDailySteps(ctx context.Context, records map[string]garm
 	}
 	fields := []string{"Year", "Month", "Day", "Week", "TotalSteps", "StepGoal"}
 	q := strings.Repeat("?,", len(fields)-1) + "?"
-	stmt, err := tx.Prepare("insert into " + DailyStepsTable + "(" + strings.Join(fields, ",") + ") values (" + q + ")")
+	stmt, err := tx.Prepare("insert into " + DailyStepsTable + "(" + strings.Join(fields, ",") + ") values (" + q + ")") // #nosec G202
 	if err != nil {
 		return telemetry.Error(span, fmt.Errorf("InsertDailySteps caused %w", err))
 	}
@@ -318,7 +318,7 @@ func (sq *Sqlite3) InsertDailySteps(ctx context.Context, records map[string]garm
 			return telemetry.Error(span, fmt.Errorf("InsertDailySteps statement execution caused: %w", err))
 		}
 	}
-	defer stmt.Close()
+	defer func() { _ = stmt.Close() }()
 	return telemetry.Error(span, tx.Commit())
 }
 
@@ -334,7 +334,7 @@ func (sq *Sqlite3) InsertHeartRate(ctx context.Context, records map[string]garmi
 	}
 	fields := []string{"Year", "Month", "Day", "Week", "WellnessMinAvgHR", "WellnessMaxAvgHR", "RestingHR"}
 	q := strings.Repeat("?,", len(fields)-1) + "?"
-	stmt, err := tx.Prepare("insert into " + HeartRateTable + "(" + strings.Join(fields, ",") + ") values (" + q + ")")
+	stmt, err := tx.Prepare("insert into " + HeartRateTable + "(" + strings.Join(fields, ",") + ") values (" + q + ")") // #nosec G202
 	if err != nil {
 		return telemetry.Error(span, fmt.Errorf("InsertHeartRate caused %w", err))
 	}
@@ -349,7 +349,7 @@ func (sq *Sqlite3) InsertHeartRate(ctx context.Context, records map[string]garmi
 			return telemetry.Error(span, fmt.Errorf("InsertHeartRate statement execution caused: %w", err))
 		}
 	}
-	defer stmt.Close()
+	defer func() { _ = stmt.Close() }()
 	return telemetry.Error(span, tx.Commit())
 }
 
@@ -442,7 +442,7 @@ func (sq *Sqlite3) QueryBestEffortDistances() ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%s failed: %w", query, err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	benames := []string{}
 	for rows.Next() {
 		var value string
@@ -471,7 +471,7 @@ func (sq *Sqlite3) QuerySports() ([]string, error) {
 	if err != nil {
 		return sports, fmt.Errorf("select caused: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var value string
 		if err = rows.Scan(&value); err != nil {
@@ -498,7 +498,7 @@ func (sq *Sqlite3) QueryWorkouts() ([]string, error) {
 	if err != nil {
 		return workouts, fmt.Errorf("select caused: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var value string
 		if err = rows.Scan(&value); err != nil {
@@ -529,7 +529,7 @@ func (sq *Sqlite3) QueryYears(opts ...QueryOption) ([]int, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%s failed: %w", query, err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	years := []int{}
 	for rows.Next() {
 		var year int
@@ -549,7 +549,7 @@ func (sq *Sqlite3) Query(fields []string, opts ...QueryOption) (*sql.Rows, error
 		WithOrder(OrderConfig{GroupBy: []string{"Year"}, OrderBy: []string{"Year desc"}}),
 	}
 	if len(opts) == 0 {
-		defaultOpts = append(defaultOpts, WithTable(SummaryTable))
+		opts = append(defaultOpts, WithTable(SummaryTable))
 	}
 	query, values := sqlQuery(fields, opts...)
 	return sq.db.Query(query, values...)

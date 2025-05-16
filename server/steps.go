@@ -99,7 +99,7 @@ func stepsStats(
 	if err != nil {
 		return nil, nil, nil, telemetry.Error(span, fmt.Errorf("select caused: %w", err))
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	totalsAbs := make([]float64, len(years))
 	modifier := float64(1000)
 	unit := "%6.1fk"

@@ -126,7 +126,7 @@ func (client *Client) runRequestWithErrorHandler(req *http.Request, errorHandler
 		return nil, err
 	}
 
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	RateLimiting.updateRateLimits(resp)
 

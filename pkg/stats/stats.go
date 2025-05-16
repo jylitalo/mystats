@@ -30,9 +30,11 @@ func Stats(
 		return nil, nil, nil, telemetry.Error(span, fmt.Errorf("unknown period: %s", period))
 	}
 	results := make([][]string, inYear[period])
-	years, err := db.QueryYears()
-	if err != nil {
-		return nil, nil, nil, telemetry.Error(span, err)
+	if years == nil {
+		var err error
+		if years, err = db.QueryYears(); err != nil {
+			return nil, nil, nil, telemetry.Error(span, err)
+		}
 	}
 	yearIndex := map[int]int{}
 	for idx, year := range years {
@@ -67,7 +69,7 @@ func Stats(
 	if err != nil {
 		return nil, nil, nil, telemetry.Error(span, fmt.Errorf("select caused: %w", err))
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	totalsAbs := make([]float64, len(years))
 	modifier := float64(1)
 	unit := "%4.0fm"
