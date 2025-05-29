@@ -2,7 +2,6 @@ package data
 
 import (
 	"iter"
-	"log/slog"
 	"slices"
 )
 
@@ -30,7 +29,6 @@ func Intersection[T comparable](arrays ...iter.Seq[T]) []T {
 			intersect = append(intersect, key)
 		}
 	}
-	slog.Info("intersection", "count", count, "intersect", intersect)
 	return intersect
 }
 
