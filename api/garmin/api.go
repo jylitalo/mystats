@@ -1,8 +1,8 @@
 package garmin
 
 type Config struct {
-	Username   string `yaml:"username" json:"username"`
-	Password   string `yaml:"password" json:"password"`
-	DailySteps string `yaml:"daily_steps" json:"daily_steps"`
-	HeartRate  string `yaml:"heart_rate" json:"heart_rate"`
+	Username   string `json:"username"    yaml:"username"`
+	Password   string `json:"password"    yaml:"password"`
+	DailySteps string `json:"daily_steps" yaml:"daily_steps"`
+	HeartRate  string `json:"heart_rate"  yaml:"heart_rate"`
 }

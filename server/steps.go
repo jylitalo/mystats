@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"html/template"
 	"log/slog"
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 
+	"github.com/jylitalo/mystats/pkg/data"
 	"github.com/jylitalo/mystats/pkg/telemetry"
 	"github.com/jylitalo/mystats/storage"
 )
@@ -69,9 +71,7 @@ func stepsStats(
 		storage.WithDayOfYear(day, month),
 		storage.WithOrder(storage.OrderConfig{GroupBy: o, OrderBy: o}),
 	}
-	for _, y := range years {
-		opts = append(opts, storage.WithYear(y))
-	}
+	opts = append(opts, storage.WithYears(years...))
 	inYear := map[string]int{
 		"month": 12,
 		"week":  53,
@@ -163,34 +163,30 @@ func (p *StepsPage) render(
 	p.Form.Years = years
 	checkedYears := selectedYears(years)
 	d := &p.Data
-	numbers, err := getSteps(ctx, db, month, day, checkedYears)
+	stepCounts, err := getSteps(ctx, db, month, day, checkedYears)
 	if err != nil {
 		slog.Error("failed to steps", "err", err)
 		return err
 	}
-	foundYears := []int{}
-	for _, year := range checkedYears {
-		if _, ok := numbers[year]; ok {
-			foundYears = append(foundYears, year)
-		}
-	}
+	foundYears := data.Intersection(slices.Values(checkedYears), maps.Keys(stepCounts))
 	if len(foundYears) == 0 {
 		slog.Error("No years found in steps.render()")
 		return nil
 	}
+	slices.Sort(foundYears)
 	refTime, err := time.Parse(time.DateOnly, fmt.Sprintf("%d-01-01", slices.Max(foundYears)))
 	if err != nil {
 		return err
 	}
 	scriptRows := [][]interface{}{}
-	for day := range numbers[foundYears[0]] {
+	for day := range stepCounts[foundYears[0]] {
 		scriptRows = append(scriptRows, make([]interface{}, len(foundYears)+1))
 		index0 := refTime.Add(24 * time.Duration(day) * time.Hour)
 		// Month in JavaScript's Date is 0-indexed
 		newDate := fmt.Sprintf("new Date(%d, %d, %d)", index0.Year(), index0.Month()-1, index0.Day())
 		scriptRows[day][0] = template.JS(newDate) // #nosec G203
 		for idx, year := range foundYears {
-			scriptRows[day][idx+1] = numbers[year][day]
+			scriptRows[day][idx+1] = stepCounts[year][day]
 		}
 	}
 	byteRows, _ := json.Marshal(scriptRows)
@@ -233,29 +229,9 @@ func getSteps(ctx context.Context, db Storage, month, day int, years []int) (num
 	_, span := telemetry.NewSpan(ctx, "server.getSteps")
 	defer span.End()
 
-	o := []string{"year", "month", "day"}
-	opts := []storage.QueryOption{
-		storage.WithDayOfYear(day, month),
-		storage.WithTable(storage.DailyStepsTable),
-		storage.WithOrder(storage.OrderConfig{GroupBy: o, OrderBy: o}),
-	}
-	for _, y := range years {
-		opts = append(opts, storage.WithYear(y))
-	}
-	years, err := db.QueryYears(opts...)
+	years, rows, err := yearToDateQuery(db, day, month, years, storage.DailyStepsTable, "TotalSteps")
 	if err != nil {
-		return nil, err
+		return nil, telemetry.Error(span, err)
 	}
-	rows, err := db.Query(append(o, "TotalSteps"), opts...)
-	if err != nil {
-		return nil, fmt.Errorf("select caused: %w", err)
-	}
-	defer func() {
-		if rows != nil {
-			if err := rows.Close(); err != nil {
-				_ = telemetry.Error(span, err)
-			}
-		}
-	}()
 	return cumulativeScan(rows, years)
 }

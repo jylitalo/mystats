@@ -46,7 +46,9 @@ type ListEventData struct {
 	TableData
 }
 
-type listStatsFn func(ctx context.Context, db stats.Storage, sports, workouts []string, years []int, limit int, name string) ([]string, [][]string, error)
+type listStatsFn func(
+	ctx context.Context, db stats.Storage, sports, workouts []string,
+	years []int, limit int, name string) ([]string, [][]string, error)
 
 type ListPage struct {
 	Form  ListFormData
@@ -55,7 +57,10 @@ type ListPage struct {
 	stats listStatsFn
 }
 
-func newListPage(ctx context.Context, db Storage, years []int, sports, workouts map[string]bool, stats listStatsFn) (*ListPage, error) {
+func newListPage(
+	ctx context.Context, db Storage, years []int,
+	sports, workouts map[string]bool, stats listStatsFn,
+) (*ListPage, error) {
 	var err error
 
 	form := newListFormData(years, sports, workouts)

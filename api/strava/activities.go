@@ -16,6 +16,8 @@ import (
 	strava "github.com/strava/go.strava"
 )
 
+// ActivitySummary sums information about single activity
+// Truncated is only present  if activity is owned by authenticated athlete, returns 0 if not truncated by privacy zones
 type ActivitySummary struct {
 	Id                 int64                 `json:"id"`
 	ExternalId         string                `json:"external_id"`
@@ -63,7 +65,7 @@ type ActivitySummary struct {
 	DeviceWatts          bool    `json:"device_watts"`
 	AverageHeartrate     float64 `json:"average_heartrate"`
 	MaximumHeartrate     float64 `json:"max_heartrate"`
-	Truncated            int     `json:"truncated"` // only present if activity is owned by authenticated athlete, returns 0 if not truncated by privacy zones
+	Truncated            int     `json:"truncated"`
 	HasKudoed            bool    `json:"has_kudoed"`
 
 	SportType     string `json:"sport_type"`

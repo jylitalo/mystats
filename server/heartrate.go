@@ -93,7 +93,6 @@ func (p *HeartRatePage) render(
 		"#00f000",
 		"#0000f0",
 	}
-
 	p.Form.EndMonth = month
 	p.Form.EndDay = day
 	p.Form.Years = years
@@ -124,15 +123,9 @@ func (p *HeartRatePage) render(
 		// Month in JavaScript's Date is 0-indexed
 		newDate := fmt.Sprintf("new Date(%d, %d, %d)", index0.Year(), index0.Month()-1, index0.Day())
 		scriptRows[day][0] = template.JS(newDate) // #nosec G203
-		start := day - avg
-		if start < 0 {
-			start = 0
-		}
+		start := max(0, day-avg)
 		for idx, year := range foundYears {
-			end := day + avg
-			if end >= len(numbers[year]) {
-				end = len(numbers[year]) - 1
-			}
+			end := min(day+avg, len(numbers[year])-1)
 			scriptRows[day][idx+1] = average(numbers[year][start : end+1])
 		}
 	}
@@ -171,30 +164,10 @@ func getHeartRate(ctx context.Context, db Storage, month, day int, years []int) 
 	_, span := telemetry.NewSpan(ctx, "server.getHeartRate")
 	defer span.End()
 
-	o := []string{"year", "month", "day"}
-	opts := []storage.QueryOption{
-		storage.WithDayOfYear(day, month),
-		storage.WithTable(storage.HeartRateTable),
-		storage.WithOrder(storage.OrderConfig{GroupBy: o, OrderBy: o}),
-	}
-	for _, y := range years {
-		opts = append(opts, storage.WithYear(y))
-	}
-	years, err := db.QueryYears(opts...)
+	years, rows, err := yearToDateQuery(db, day, month, years, storage.HeartRateTable, "RestingHR")
 	if err != nil {
-		return nil, err
+		return nil, telemetry.Error(span, err)
 	}
-	rows, err := db.Query(append(o, "RestingHR"), opts...)
-	if err != nil {
-		return nil, fmt.Errorf("select caused: %w", err)
-	}
-	defer func() {
-		if rows != nil {
-			if err := rows.Close(); err != nil {
-				_ = telemetry.Error(span, err)
-			}
-		}
-	}()
 	return absoluteScan(rows, years)
 }
 
@@ -203,9 +176,11 @@ func absoluteScan(rows *sql.Rows, years []int) (numbers, error) {
 	day1 := map[int]time.Time{}
 	// ys is map, where key is year and array has entry for each day of the year
 	ys := map[int][]float64{}
+	previous_y := map[int]float64{}
 	for _, year := range years {
 		day1[year] = time.Date(year, time.January, 1, 6, 0, 0, 0, tz)
 		ys[year] = []float64{}
+		previous_y[year] = 0
 	}
 	max_acts := 0
 	if rows == nil {
@@ -220,27 +195,23 @@ func absoluteScan(rows *sql.Rows, years []int) (numbers, error) {
 		now := time.Date(year, time.Month(month), day, 6, 0, 0, 0, tz) // time when activity happened
 		days := int(now.Sub(day1[year]).Hours()/24) + 1                // day within a year (1-365)
 		if days > 366 {
-			log.Fatalf("days got impossible number %d (year=%d, month=%d, day=%d, now=%#v, day1=%#v)", days, year, month, day, now, day1[year])
+			log.Fatalf(
+				"days got impossible number %d (year=%d, month=%d, day=%d, now=%#v, day1=%#v)",
+				days, year, month, day, now, day1[year],
+			)
 		}
 		yslen := len(ys[year])
-		previous_y := float64(0)
-		if yslen > 0 {
-			previous_y = ys[year][yslen-1]
-		}
 		for x := yslen; x < days-1; x++ { // fill the gaps on days that didn't have activities
-			ys[year] = append(ys[year], previous_y)
+			ys[year] = append(ys[year], previous_y[year])
 		}
 		max_acts = max(max_acts, days)
 		ys[year] = append(ys[year], value)
+		previous_y[year] = value
 	}
 	for _, year := range years { // fill the end of year
 		yslen := len(ys[year])
-		previous_y := float64(0)
-		if yslen > 0 {
-			previous_y = ys[year][yslen-1]
-		}
 		for x := yslen; x < max_acts; x++ {
-			ys[year] = append(ys[year], previous_y)
+			ys[year] = append(ys[year], previous_y[year])
 		}
 	}
 	return ys, nil

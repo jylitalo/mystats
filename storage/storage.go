@@ -106,9 +106,9 @@ func WithDayOfYear(day, month int) QueryOption {
 	}
 }
 
-func WithYear(year int) QueryOption {
+func WithYears(year ...int) QueryOption {
 	return func(c *QueryConfig) {
-		c.Years = append(c.Years, year)
+		c.Years = append(c.Years, year...)
 	}
 }
 
@@ -130,24 +130,35 @@ func WithName(name string) QueryOption {
 	}
 }
 
-func WithSport(name string) QueryOption {
+func WithSports(names ...string) QueryOption {
 	return func(c *QueryConfig) {
-		c.Sport = append(c.Sport, name)
+		c.Sport = append(c.Sport, names...)
 	}
 }
 
-func WithWorkout(name string) QueryOption {
+func WithWorkouts(names ...string) QueryOption {
 	return func(c *QueryConfig) {
-		c.Workout = append(c.Workout, name)
+		c.Workout = append(c.Workout, names...)
 	}
 }
 
-const dbName string = "mystats.sql"
-const BestEffortTable string = "BestEffort"
-const DailyStepsTable string = "DailySteps"
-const HeartRateTable string = "HeartRate"
-const SplitTable string = "Split"
-const SummaryTable string = "Summary"
+// dbName is the filename of sqlite file
+const dbName = "mystats.sql"
+
+// BestEffortTable is where Strava's running Best Effort estimates are stored
+const BestEffortTable = "BestEffort"
+
+// DailyStepsTable is where Garmin's daily steps count is stored
+const DailyStepsTable = "DailySteps"
+
+// HeartRateTable is where Garmin's daily resting heartrate is stored
+const HeartRateTable = "HeartRate"
+
+// SplitTable is where Strava activities Split times are stored
+const SplitTable = "Split"
+
+// SummaryTable is where Strava's summary about activity are stored
+const SummaryTable = "Summary"
 
 func (sq *Sqlite3) Remove() error {
 	if _, err := os.Stat(dbName); err != nil && errors.Is(err, os.ErrNotExist) {
@@ -223,7 +234,8 @@ func (sq *Sqlite3) InsertSummary(ctx context.Context, records []SummaryRecord) e
 		"Distance", "Elevation", "ElapsedTime", "MovingTime",
 	}
 	q := strings.Repeat("?,", len(fields)-1) + "?"
-	stmt, err := tx.Prepare("insert into " + SummaryTable + "(" + strings.Join(fields, ",") + ") values (" + q + ")") // #nosec G202
+	// #nosec G202
+	stmt, err := tx.Prepare("insert into " + SummaryTable + "(" + strings.Join(fields, ",") + ") values (" + q + ")")
 	if err != nil {
 		return telemetry.Error(span, fmt.Errorf("InsertSummary caused %w", err))
 	}
@@ -253,7 +265,8 @@ func (sq *Sqlite3) InsertBestEffort(ctx context.Context, records []BestEffortRec
 	}
 	fields := []string{"StravaID", "Name", "ElapsedTime", "MovingTime", "Distance"}
 	q := strings.Repeat("?,", len(fields)-1) + "?"
-	stmt, err := tx.Prepare("insert into " + BestEffortTable + "(" + strings.Join(fields, ",") + ") values (" + q + ")") // #nosec G202
+	// #nosec G202
+	stmt, err := tx.Prepare("insert into " + BestEffortTable + "(" + strings.Join(fields, ",") + ") values (" + q + ")")
 	if err != nil {
 		return telemetry.Error(span, fmt.Errorf("InsertBestEffort caused %w", err))
 	}
@@ -278,7 +291,8 @@ func (sq *Sqlite3) InsertSplit(ctx context.Context, records []SplitRecord) error
 	}
 	fields := []string{"StravaID", "Split", "ElapsedTime", "MovingTime", "Distance", "ElevationDiff"}
 	q := strings.Repeat("?,", len(fields)-1) + "?"
-	stmt, err := tx.Prepare("insert into " + SplitTable + "(" + strings.Join(fields, ",") + ") values (" + q + ")") // #nosec G202
+	// #nosec G202
+	stmt, err := tx.Prepare("insert into " + SplitTable + "(" + strings.Join(fields, ",") + ") values (" + q + ")")
 	if err != nil {
 		return telemetry.Error(span, fmt.Errorf("InsertSplit caused %w", err))
 	}
@@ -304,7 +318,8 @@ func (sq *Sqlite3) InsertDailySteps(ctx context.Context, records map[string]garm
 	}
 	fields := []string{"Year", "Month", "Day", "Week", "TotalSteps", "StepGoal"}
 	q := strings.Repeat("?,", len(fields)-1) + "?"
-	stmt, err := tx.Prepare("insert into " + DailyStepsTable + "(" + strings.Join(fields, ",") + ") values (" + q + ")") // #nosec G202
+	// #nosec G202
+	stmt, err := tx.Prepare("insert into " + DailyStepsTable + "(" + strings.Join(fields, ",") + ") values (" + q + ")")
 	if err != nil {
 		return telemetry.Error(span, fmt.Errorf("InsertDailySteps caused %w", err))
 	}
@@ -334,7 +349,8 @@ func (sq *Sqlite3) InsertHeartRate(ctx context.Context, records map[string]garmi
 	}
 	fields := []string{"Year", "Month", "Day", "Week", "WellnessMinAvgHR", "WellnessMaxAvgHR", "RestingHR"}
 	q := strings.Repeat("?,", len(fields)-1) + "?"
-	stmt, err := tx.Prepare("insert into " + HeartRateTable + "(" + strings.Join(fields, ",") + ") values (" + q + ")") // #nosec G202
+	// #nosec G202
+	stmt, err := tx.Prepare("insert into " + HeartRateTable + "(" + strings.Join(fields, ",") + ") values (" + q + ")")
 	if err != nil {
 		return telemetry.Error(span, fmt.Errorf("InsertHeartRate caused %w", err))
 	}
@@ -345,7 +361,8 @@ func (sq *Sqlite3) InsertHeartRate(ctx context.Context, records map[string]garmi
 			return telemetry.Error(span, fmt.Errorf("InsertHeartRate time parsing (%s) caused: %w", key, err))
 		}
 		_, week := t.ISOWeek()
-		if _, err = stmt.Exec(t.Year(), t.Month(), t.Day(), week, r.WellnessMinAvgHR, r.WellnessMaxAvgHR, r.RestingHR); err != nil {
+		_, err = stmt.Exec(t.Year(), t.Month(), t.Day(), week, r.WellnessMinAvgHR, r.WellnessMaxAvgHR, r.RestingHR)
+		if err != nil {
 			return telemetry.Error(span, fmt.Errorf("InsertHeartRate statement execution caused: %w", err))
 		}
 	}
@@ -353,7 +370,7 @@ func (sq *Sqlite3) InsertHeartRate(ctx context.Context, records map[string]garmi
 	return telemetry.Error(span, tx.Commit())
 }
 
-func sqlQuery(fields []string, opts ...QueryOption) (string, []interface{}) {
+func sqlQuery(fields []string, opts ...QueryOption) (string, []interface{}) { //nolint:cyclop
 	cfg := &QueryConfig{}
 	for _, opt := range opts {
 		opt(cfg)
@@ -406,26 +423,30 @@ func sqlQuery(fields []string, opts ...QueryOption) (string, []interface{}) {
 	if len(where) > 0 {
 		condition = " where " + strings.Join(where, " and ")
 	}
-	sorting := ""
-	if cfg.Order != nil {
-		if cfg.Order.GroupBy != nil {
-			sorting += " group by " + strings.Join(cfg.Order.GroupBy, ",")
-		}
-		if cfg.Order.OrderBy != nil {
-			sorting += " order by " + strings.Join(cfg.Order.OrderBy, ",")
-		}
-		if cfg.Order.Limit > 0 {
-			sorting += " limit " + strconv.FormatInt(int64(cfg.Order.Limit), 10)
-		}
-	}
 	ifArgs := make([]interface{}, len(args))
 	for i, v := range args {
 		ifArgs[i] = v
 	}
 	return fmt.Sprintf(
 		"select %s from %s%s%s", strings.Join(fields, ","), strings.Join(cfg.Tables, ","),
-		condition, sorting,
+		condition, sortingOrder(cfg.Order),
 	), ifArgs
+}
+
+func sortingOrder(order *OrderConfig) string {
+	sorting := ""
+	if order != nil {
+		if order.GroupBy != nil {
+			sorting += " group by " + strings.Join(order.GroupBy, ",")
+		}
+		if order.OrderBy != nil {
+			sorting += " order by " + strings.Join(order.OrderBy, ",")
+		}
+		if order.Limit > 0 {
+			sorting += " limit " + strconv.FormatInt(int64(order.Limit), 10)
+		}
+	}
+	return sorting
 }
 
 func (sq *Sqlite3) QueryBestEffortDistances() ([]string, error) {
@@ -437,7 +458,7 @@ func (sq *Sqlite3) QueryBestEffortDistances() ([]string, error) {
 		WithTable(BestEffortTable),
 		WithOrder(OrderConfig{OrderBy: []string{"distance desc"}}),
 	)
-	// slog.Info("storage.Query", "query", query)
+	slog.Info("storage.Query", "query", query)
 	rows, err := sq.db.Query(query, values...)
 	if err != nil {
 		return nil, fmt.Errorf("%s failed: %w", query, err)
@@ -487,10 +508,11 @@ func (sq *Sqlite3) QueryWorkouts() ([]string, error) {
 	if sq.db == nil {
 		return nil, errors.New("database is nil")
 	}
+	o := []string{SummaryTable + ".WorkoutType"}
 	query, values := sqlQuery(
 		[]string{"distinct(" + SummaryTable + ".WorkoutType)"},
 		WithTable(SummaryTable),
-		WithOrder(OrderConfig{GroupBy: []string{SummaryTable + ".WorkoutType"}, OrderBy: []string{SummaryTable + ".WorkoutType"}}),
+		WithOrder(OrderConfig{GroupBy: o, OrderBy: o}),
 	)
 	// slog.Info("storage.Query", "query", query)
 	rows, err := sq.db.Query(query, values...)
@@ -545,11 +567,11 @@ func (sq *Sqlite3) Query(fields []string, opts ...QueryOption) (*sql.Rows, error
 	if sq.db == nil {
 		return nil, errors.New("database is nil")
 	}
-	defaultOpts := []QueryOption{
-		WithOrder(OrderConfig{GroupBy: []string{"Year"}, OrderBy: []string{"Year desc"}}),
-	}
 	if len(opts) == 0 {
-		opts = append(defaultOpts, WithTable(SummaryTable))
+		opts = []QueryOption{
+			WithOrder(OrderConfig{GroupBy: []string{"Year"}, OrderBy: []string{"Year desc"}}),
+		}
+		opts = append(opts, WithTable(SummaryTable))
 	}
 	query, values := sqlQuery(fields, opts...)
 	return sq.db.Query(query, values...)

@@ -40,7 +40,11 @@ func Get(ctx context.Context) (*Config, error) {
 	if cfg == nil {
 		return nil, errors.New("config not found from context")
 	}
-	return cfg.(*Config), nil
+	v, ok := cfg.(*Config)
+	if !ok {
+		return nil, errors.New("config type conversion failed")
+	}
+	return v, nil
 }
 
 func Read(ctx context.Context, refresh bool) (context.Context, error) {
@@ -91,5 +95,5 @@ func (cfg *Config) Write() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return fname, os.WriteFile(fname, text, 0600)
+	return fname, os.WriteFile(fname, text, 0o600)
 }

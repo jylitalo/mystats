@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"html/template"
 	"io"
 	"maps"
@@ -236,6 +237,22 @@ func yearValues(values url.Values) (map[int]bool, error) {
 	}
 	// slog.Info("server.yearValues", "years", years)
 	return years, nil
+}
+
+func yearToDateQuery(db Storage, day, month int, years []int, table, column string) ([]int, *sql.Rows, error) {
+	o := []string{"year", "month", "day"}
+	opts := []storage.QueryOption{
+		storage.WithDayOfYear(day, month),
+		storage.WithTable(table),
+		storage.WithOrder(storage.OrderConfig{GroupBy: o, OrderBy: o}),
+	}
+	opts = append(opts, storage.WithYears(years...))
+	rows, err := db.Query(append(o, column), opts...)
+	if err != nil {
+		return nil, nil, fmt.Errorf("select caused: %w", err)
+	}
+	foundYears, err := db.QueryYears(opts...)
+	return foundYears, rows, err
 }
 
 func Start(ctx context.Context, db Storage, sports []string, port int) error {

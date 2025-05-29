@@ -16,6 +16,7 @@ import (
 
 // printCSV outputs results in CSV format
 func printCSV(period, measurement string, years []int, results [][]string, totals []string) {
+	fmt.Printf("# %s stats:\n", measurement)
 	fmt.Printf("%-5s", period)
 	for _, year := range years {
 		fmt.Printf(",%d", year)
@@ -35,9 +36,7 @@ func printTable(period, measurement string, years []int, results [][]string, tot
 		return time.Month(i).String()
 	}
 	if period == "week" {
-		first = func(i int) string {
-			return strconv.Itoa(i)
-		}
+		first = strconv.Itoa
 	}
 	table := tablewriter.NewWriter(os.Stdout)
 	table.SetFooterAlignment(tablewriter.ALIGN_RIGHT)
@@ -45,6 +44,7 @@ func printTable(period, measurement string, years []int, results [][]string, tot
 	for _, year := range years {
 		header = append(header, strconv.Itoa(year))
 	}
+	table.SetCaption(true, measurement)
 	table.SetHeader(header)
 	for idx := range results {
 		if strings.TrimSpace(strings.Join(results[idx], "")) != "" {

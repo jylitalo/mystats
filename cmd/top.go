@@ -12,7 +12,7 @@ import (
 	"github.com/jylitalo/mystats/pkg/stats"
 )
 
-// printCSV outputs results in CSV format
+// printTopCSV outputs results in CSV format
 func printTopCSV(headers []string, results [][]string) {
 	fmt.Print(strings.Join(headers, ","))
 	fmt.Println()
@@ -21,7 +21,7 @@ func printTopCSV(headers []string, results [][]string) {
 	}
 }
 
-// printTable outputs results in CSV format
+// printTopTable outputs results in CSV format
 func printTopTable(headers []string, results [][]string) {
 	table := tablewriter.NewWriter(os.Stdout)
 	table.SetHeader(headers)
