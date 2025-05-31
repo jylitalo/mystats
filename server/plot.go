@@ -9,6 +9,7 @@ import (
 	"html/template"
 	"log"
 	"log/slog"
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 
+	"github.com/jylitalo/mystats/pkg/data"
 	"github.com/jylitalo/mystats/pkg/stats"
 	"github.com/jylitalo/mystats/pkg/telemetry"
 	"github.com/jylitalo/mystats/storage"
@@ -84,17 +86,23 @@ type PlotPage struct {
 	Form PlotFormData
 }
 
-func newPlotPage(ctx context.Context, db Storage, years []int, sports, workouts map[string]bool, stats plotStatsFn) (*PlotPage, error) {
+func newPlotPage(
+	ctx context.Context, db Storage, years []int,
+	sports, workouts map[string]bool, stats plotStatsFn,
+) (*PlotPage, error) {
 	form := newPlotFormData(years, sports, workouts)
 	page := &PlotPage{
 		Form: form,
 		Data: newPlotData(stats, form.Period),
 	}
-	return page, page.render(ctx, db, sports, workouts, form.EndMonth, form.EndDay, form.Years, form.Period)
+	return page, page.render(
+		ctx, db, selectedSports(sports), selectedWorkouts(workouts),
+		form.EndMonth, form.EndDay, form.Years, form.Period,
+	)
 }
 
 func (p *PlotPage) render(
-	ctx context.Context, db Storage, sports, workouts map[string]bool, month, day int,
+	ctx context.Context, db Storage, sports, workouts []string, month, day int,
 	years map[int]bool, period string,
 ) error {
 	ctx, span := telemetry.NewSpan(ctx, "plot.render")
@@ -116,38 +124,32 @@ func (p *PlotPage) render(
 	p.Form.EndMonth = month
 	p.Form.EndDay = day
 	p.Form.Years = years
-	checkedSports := selectedSports(sports)
-	checkedWorkouts := selectedWorkouts(workouts)
 	checkedYears := selectedYears(years)
 	d := &p.Data
-	numbers, err := getNumbers(ctx, db, checkedSports, checkedWorkouts, d.Measure, month, day, checkedYears)
+	measured, err := getNumbers(ctx, db, sports, workouts, d.Measure, month, day, checkedYears)
 	if err != nil {
 		slog.Error("failed to plot", "err", err)
 		return err
 	}
-	foundYears := []int{}
-	for _, year := range checkedYears {
-		if _, ok := numbers[year]; ok {
-			foundYears = append(foundYears, year)
-		}
-	}
+	foundYears := data.Intersection(slices.Values(checkedYears), maps.Keys(measured))
 	if len(foundYears) == 0 {
 		slog.Error("No years found in plot.render()")
 		return nil
 	}
+	slices.Sort(foundYears)
 	refTime, err := time.Parse(time.DateOnly, fmt.Sprintf("%d-01-01", slices.Max(foundYears)))
 	if err != nil {
 		return err
 	}
 	scriptRows := [][]interface{}{}
-	for day := range numbers[foundYears[0]] {
+	for day := range measured[foundYears[0]] {
 		scriptRows = append(scriptRows, make([]interface{}, len(foundYears)+1))
 		index0 := refTime.Add(24 * time.Duration(day) * time.Hour)
 		// Month in JavaScript's Date is 0-indexed
 		newDate := fmt.Sprintf("new Date(%d, %d, %d)", index0.Year(), index0.Month()-1, index0.Day())
 		scriptRows[day][0] = template.JS(newDate) // #nosec G203
 		for idx, year := range foundYears {
-			scriptRows[day][idx+1] = numbers[year][day]
+			scriptRows[day][idx+1] = measured[year][day]
 		}
 	}
 	byteRows, _ := json.Marshal(scriptRows)
@@ -160,8 +162,7 @@ func (p *PlotPage) render(
 		measure = "elapsedtime"
 	}
 	d.Years, d.Stats, d.Totals, err = d.stats(
-		ctx, db, "sum("+measure+")", period, checkedSports, checkedWorkouts,
-		month, day, foundYears,
+		ctx, db, "sum("+measure+")", period, sports, workouts, month, day, foundYears,
 	)
 	if err != nil {
 		slog.Error("failed to calculate stats", "err", err)
@@ -190,7 +191,10 @@ func plotPost(ctx context.Context, page *PlotPage, db Storage) func(c echo.Conte
 		}
 		slog.Info("POST /plot", "values", values)
 		return telemetry.Error(span, errors.Join(
-			page.render(ctx, db, sports, workouts, month, day, years, page.Data.Period),
+			page.render(
+				ctx, db, selectedSports(sports), selectedWorkouts(workouts),
+				month, day, years, page.Data.Period,
+			),
 			c.Render(200, "plot-data", page.Data),
 		))
 	}
@@ -201,9 +205,11 @@ func cumulativeScan(rows *sql.Rows, years []int) (numbers, error) {
 	day1 := map[int]time.Time{}
 	// ys is map, where key is year and array has entry for each day of the year
 	ys := map[int][]float64{}
+	previous_y := map[int]float64{}
 	for _, year := range years {
 		day1[year] = time.Date(year, time.January, 1, 6, 0, 0, 0, tz)
 		ys[year] = []float64{}
+		previous_y[year] = 0
 	}
 	max_acts := 0
 	if rows == nil {
@@ -218,27 +224,23 @@ func cumulativeScan(rows *sql.Rows, years []int) (numbers, error) {
 		now := time.Date(year, time.Month(month), day, 6, 0, 0, 0, tz) // time when activity happened
 		days := int(now.Sub(day1[year]).Hours()/24) + 1                // day within a year (1-365)
 		if days > 366 {
-			log.Fatalf("days got impossible number %d (year=%d, month=%d, day=%d, now=%#v, day1=%#v)", days, year, month, day, now, day1[year])
+			log.Fatalf(
+				"days got impossible number %d (year=%d, month=%d, day=%d, now=%#v, day1=%#v)",
+				days, year, month, day, now, day1[year],
+			)
 		}
 		yslen := len(ys[year])
-		previous_y := float64(0)
-		if yslen > 0 {
-			previous_y = ys[year][yslen-1]
-		}
 		for x := yslen; x < days-1; x++ { // fill the gaps on days that didn't have activities
-			ys[year] = append(ys[year], previous_y)
+			ys[year] = append(ys[year], previous_y[year])
 		}
 		max_acts = max(max_acts, days)
-		ys[year] = append(ys[year], previous_y+value)
+		previous_y[year] += value
+		ys[year] = append(ys[year], previous_y[year])
 	}
 	for _, year := range years { // fill the end of year
 		yslen := len(ys[year])
-		previous_y := float64(0)
-		if yslen > 0 {
-			previous_y = ys[year][yslen-1]
-		}
 		for x := yslen; x < max_acts; x++ {
-			ys[year] = append(ys[year], previous_y)
+			ys[year] = append(ys[year], previous_y[year])
 		}
 	}
 	return ys, nil
@@ -256,19 +258,9 @@ func getNumbers(
 		storage.WithDayOfYear(day, month),
 		storage.WithOrder(storage.OrderConfig{GroupBy: o, OrderBy: o}),
 	}
-	for _, s := range sports {
-		opts = append(opts, storage.WithSport(s))
-	}
-	for _, w := range workouts {
-		opts = append(opts, storage.WithWorkout(w))
-	}
-	for _, y := range years {
-		opts = append(opts, storage.WithYear(y))
-	}
-	years, err := db.QueryYears(opts...)
-	if err != nil {
-		return nil, err
-	}
+	opts = append(opts, storage.WithSports(sports...))
+	opts = append(opts, storage.WithWorkouts(workouts...))
+	opts = append(opts, storage.WithYears(years...))
 	var m string
 	switch measure {
 	case "time":
@@ -289,5 +281,9 @@ func getNumbers(
 			}
 		}
 	}()
-	return cumulativeScan(rows, years)
+	foundYears, err := db.QueryYears(opts...)
+	if err != nil {
+		return nil, err
+	}
+	return cumulativeScan(rows, foundYears)
 }

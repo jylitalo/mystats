@@ -55,7 +55,6 @@ func newTraceProvider(exp sdktrace.SpanExporter) *sdktrace.TracerProvider {
 			semconv.ServiceName("mystats"),
 		),
 	)
-
 	if err != nil {
 		panic(err)
 	}
@@ -91,7 +90,11 @@ func NewSpan(ctx context.Context, name string) (context.Context, trace.Span) {
 	if value == nil {
 		log.Fatal("Telemetry has not been setup")
 	}
-	return value.(trace.Tracer).Start(ctx, name)
+	v, ok := value.(trace.Tracer)
+	if !ok {
+		log.Fatal("telemetry type conversion failed")
+	}
+	return v.Start(ctx, name)
 }
 
 func Error(span trace.Span, err error) error {

@@ -46,7 +46,9 @@ type ListEventData struct {
 	TableData
 }
 
-type listStatsFn func(ctx context.Context, db stats.Storage, sports, workouts []string, years []int, limit int, name string) ([]string, [][]string, error)
+type listStatsFn func(
+	ctx context.Context, db stats.Storage, sports, workouts []string,
+	years []int, limit int, name string) ([]string, [][]string, error)
 
 type ListPage struct {
 	Form  ListFormData
@@ -55,7 +57,10 @@ type ListPage struct {
 	stats listStatsFn
 }
 
-func newListPage(ctx context.Context, db Storage, years []int, sports, workouts map[string]bool, stats listStatsFn) (*ListPage, error) {
+func newListPage(
+	ctx context.Context, db Storage, years []int,
+	sports, workouts map[string]bool, stats listStatsFn,
+) (*ListPage, error) {
 	var err error
 
 	form := newListFormData(years, sports, workouts)
@@ -122,7 +127,7 @@ func listEvent(ctx context.Context, page *ListPage, db Storage) func(c echo.Cont
 		if err != nil {
 			return telemetry.Error(span, err)
 		}
-		defer rows.Close()
+		defer func() { _ = rows.Close() }()
 		if !rows.Next() {
 			return fmt.Errorf("listEvent was unable to find activity %d", id)
 		}

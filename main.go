@@ -23,6 +23,6 @@ func main() {
 	if err := cmd.Execute(ctx); err != nil {
 		_ = telemetry.Error(span, err)
 		span.End()
-		log.Fatal(err)
+		log.Fatal(err) //nolint:gocritic
 	}
 }

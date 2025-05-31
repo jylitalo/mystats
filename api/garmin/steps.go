@@ -3,8 +3,8 @@ package garmin
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"os"
+	"path/filepath"
 	"time"
 
 	garmin "github.com/jylitalo/go-garmin"
@@ -13,7 +13,7 @@ import (
 func DailySteps(user *garmin.UserSummaryService, all bool) ([]garmin.DailySteps, error) {
 	steps := []garmin.DailySteps{}
 	end := time.Now()
-	for true {
+	for {
 		start := end.Add(-26 * 24 * time.Hour)
 		resp, err := user.DailySteps(start, end)
 		if resp != nil {
@@ -24,13 +24,12 @@ func DailySteps(user *garmin.UserSummaryService, all bool) ([]garmin.DailySteps,
 		}
 		end = start
 	}
-	return steps, errors.New("broke out of for loop")
 }
 
 func ReadDailyStepsJSONs(ctx context.Context, fnames []string) (map[string]garmin.DailyStepsStat, error) {
 	values := map[string]garmin.DailyStepsStat{}
 	for _, fname := range fnames {
-		content, err := os.ReadFile(fname)
+		content, err := os.ReadFile(filepath.Clean(fname))
 		if err != nil {
 			return values, err
 		}

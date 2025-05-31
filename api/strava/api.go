@@ -17,13 +17,13 @@ import (
 
 // Config requires that you modify Refresh() if you add new fields into struct
 type Config struct {
-	ClientID     int    `yaml:"clientID" json:"client_id"`
-	ClientSecret string `yaml:"clientSecret" json:"client_secret"`
-	AccessToken  string `yaml:"accessToken" json:"access_token"`
-	RefreshToken string `yaml:"refreshToken" json:"refresh_token"`
-	ExpiresAt    int64  `yaml:"expiresAt" json:"expires_at"`
-	Summaries    string `yaml:"summaries" json:"summaries"`
-	Activities   string `yaml:"activities" json:"activities"`
+	ClientID     int    `json:"client_id"     yaml:"clientID"`
+	ClientSecret string `json:"client_secret" yaml:"clientSecret"`
+	AccessToken  string `json:"access_token"  yaml:"accessToken"`
+	RefreshToken string `json:"refresh_token" yaml:"refreshToken"`
+	ExpiresAt    int64  `json:"expires_at"    yaml:"expiresAt"`
+	Summaries    string `json:"summaries"     yaml:"summaries"`
+	Activities   string `json:"activities"    yaml:"activities"`
 }
 
 const tokenURL string = "https://www.strava.com/oauth/token" // #nosec G101
@@ -33,7 +33,7 @@ func (cfg *Config) AuthorizationCode(code string) (*Config, error) {
 		"%s?client_id=%d&client_secret=%s&code=%s&grant_type=authorization_code",
 		tokenURL, cfg.ClientID, cfg.ClientSecret, code,
 	)
-	req, err := http.NewRequest("POST", url, nil)
+	req, err := http.NewRequest(http.MethodPost, url, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -42,7 +42,7 @@ func (cfg *Config) AuthorizationCode(code string) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
@@ -66,7 +66,7 @@ func (cfg *Config) Refresh() (*Config, bool, error) {
 		"%s?client_id=%d&client_secret=%s&refresh_token=%s&grant_type=refresh_token",
 		tokenURL, cfg.ClientID, cfg.ClientSecret, cfg.RefreshToken,
 	)
-	req, err := http.NewRequest("POST", url, nil)
+	req, err := http.NewRequest(http.MethodPost, url, nil)
 	if err != nil {
 		return nil, false, err
 	}
@@ -75,7 +75,7 @@ func (cfg *Config) Refresh() (*Config, bool, error) {
 	if err != nil {
 		return nil, false, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, false, err

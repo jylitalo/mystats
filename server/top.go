@@ -53,7 +53,10 @@ type TopData struct {
 	TableData
 }
 
-func newTopData(ctx context.Context, db Storage, measure, period string, sports, workouts []string, limit int, years []int, stats topStatsFn) (*TopData, error) {
+func newTopData(
+	ctx context.Context, db Storage, measure, period string,
+	sports, workouts []string, limit int, years []int, stats topStatsFn,
+) (*TopData, error) {
 	var err error
 	data := &TopData{
 		Measure: measure,
@@ -69,7 +72,10 @@ type TopPage struct {
 	Data *TopData
 }
 
-func newTopPage(ctx context.Context, db Storage, years []int, sports, workouts map[string]bool, stats topStatsFn) (*TopPage, error) {
+func newTopPage(
+	ctx context.Context, db Storage, years []int,
+	sports, workouts map[string]bool, stats topStatsFn,
+) (*TopPage, error) {
 	form := newTopFormData(years, sports, workouts)
 	data, err := newTopData(
 		ctx, db, form.Measure, form.Period, selectedSports(sports),

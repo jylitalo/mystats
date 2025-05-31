@@ -14,7 +14,10 @@ import (
 	strava "github.com/strava/go.strava"
 )
 
-var ClientId int
+// ClientID is the Strava application client ID.
+var ClientID int
+
+// ClientSecret is the Strava application client secret.
 var ClientSecret string
 
 const basePath = "https://www.strava.com/api/v3"
@@ -61,7 +64,6 @@ func NewClient(token string, client ...*http.Client) *Client {
 }
 
 // NewStubResponseClient can be used for testing
-// TODO, stub out with an actual response
 func NewStubResponseClient(content string, statusCode ...int) *Client {
 	c := NewClient("")
 	t := &stubResponseTransport{content: content}
@@ -101,7 +103,7 @@ func (client *Client) run(method, path string, params map[string]interface{}) ([
 
 	var req *http.Request
 	if method == "POST" {
-		req, err = http.NewRequest("POST", basePath+path, strings.NewReader(values.Encode()))
+		req, err = http.NewRequest(http.MethodPost, basePath+path, strings.NewReader(values.Encode()))
 		if err != nil {
 			return nil, err
 		}
@@ -120,13 +122,12 @@ func (client *Client) runRequestWithErrorHandler(req *http.Request, errorHandler
 	req.Header.Set("Authorization", "Bearer "+client.token)
 	req.Header.Set("User-Agent", "Strava Golang Library v1")
 	resp, err := client.httpClient.Do(req)
-
 	// this was a poor request, maybe strava servers down?
 	if err != nil {
 		return nil, err
 	}
 
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	RateLimiting.updateRateLimits(resp)
 

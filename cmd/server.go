@@ -22,7 +22,7 @@ func serverCmd(types []string) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer db.Close()
+			defer func() { _ = db.Close() }()
 			slog.Info("start service", "port", port)
 			return server.Start(cmd.Context(), db, types, port)
 		},

@@ -10,6 +10,7 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/spf13/cobra"
+	stravaapi "github.com/strava/go.strava"
 
 	"github.com/jylitalo/mystats/api/garmin"
 	"github.com/jylitalo/mystats/api/strava"
@@ -39,7 +40,7 @@ func makeCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer db.Close()
+			defer func() { _ = db.Close() }()
 			return err
 		},
 	}
@@ -86,78 +87,81 @@ func makeDB(ctx context.Context, update bool) (Storage, error) {
 	db := &storage.Sqlite3{}
 	if skipDB(db, append(pageFnames, actFnames...)) {
 		slog.Info("Database is uptodate")
-		if err := db.Open(); err != nil {
-			return nil, telemetry.Error(span, err)
-		}
-		return db, nil
+		return db, telemetry.Error(span, db.Open())
 	}
 	slog.Info("Making database")
-	dbActivities := []storage.SummaryRecord{}
-	if activities, err := strava.ReadSummaryJSONs(pageFnames); err != nil {
-		return nil, telemetry.Error(span, err)
-	} else {
-		for _, activity := range activities {
-			t := activity.StartDateLocal
-			year, week := t.ISOWeek()
-			dbActivities = append(dbActivities, storage.SummaryRecord{
-				StravaID:    activity.Id,
-				Year:        year,
-				Month:       int(t.Month()),
-				Day:         t.Day(),
-				Week:        week,
-				Name:        activity.Name,
-				Type:        activity.Type.String(),
-				SportType:   activity.SportType,
-				WorkoutType: activity.WorkoutType(),
-				Distance:    activity.Distance,
-				Elevation:   activity.TotalElevationGain,
-				MovingTime:  activity.MovingTime,
-				ElapsedTime: activity.ElapsedTime,
-			})
-		}
-	}
-	dbEfforts := []storage.BestEffortRecord{}
-	dbSplits := []storage.SplitRecord{}
-	if acts, err := strava.ReadActivityJSONs(ctx, actFnames); err != nil {
-		return nil, telemetry.Error(span, err)
-	} else {
-		for _, activity := range acts {
-			id := activity.Id
-			for _, be := range activity.BestEfforts {
-				dbEfforts = append(dbEfforts, storage.BestEffortRecord{
-					StravaID:    id,
-					Name:        be.EffortSummary.Name,
-					MovingTime:  be.EffortSummary.MovingTime,
-					ElapsedTime: be.EffortSummary.ElapsedTime,
-					Distance:    int(be.Distance),
-				})
-			}
-			for _, split := range activity.SplitsMetric {
-				dbSplits = append(dbSplits, storage.SplitRecord{
-					StravaID:      id,
-					Split:         split.Split,
-					MovingTime:    split.MovingTime,
-					ElapsedTime:   split.ElapsedTime,
-					ElevationDiff: split.ElevationDifference,
-					Distance:      split.Distance,
-				})
-
-			}
-		}
-	}
+	summaries, errS := strava.ReadSummaryJSONs(pageFnames)
+	acts, errA := strava.ReadActivityJSONs(ctx, actFnames)
 	dbDailySteps, errDS := garmin.ReadDailyStepsJSONs(ctx, stepsFiles)
 	dbHeartRate, errHR := garmin.ReadHeartRateJSONs(ctx, heartRateFiles)
-	if err := errors.Join(errDS, errHR); err != nil {
+	if err := errors.Join(errS, errA, errDS, errHR); err != nil {
 		return nil, telemetry.Error(span, err)
 	}
 	ctx, spanDB := telemetry.NewSpan(ctx, "rebuildDB")
 	defer spanDB.End()
 	return db, telemetry.Error(spanDB, errors.Join(
 		db.Remove(), db.Open(), db.Create(),
-		db.InsertSummary(ctx, dbActivities),
-		db.InsertBestEffort(ctx, dbEfforts),
-		db.InsertSplit(ctx, dbSplits),
+		db.InsertSummary(ctx, getDbActivities(summaries)),
+		db.InsertBestEffort(ctx, getDbBestEfforts(acts)),
+		db.InsertSplit(ctx, getDbSplits(acts)),
 		db.InsertDailySteps(ctx, dbDailySteps),
 		db.InsertHeartRate(ctx, dbHeartRate),
 	))
+}
+
+func getDbActivities(activities []strava.ActivitySummary) []storage.SummaryRecord {
+	dbActivities := []storage.SummaryRecord{}
+	for _, activity := range activities {
+		t := activity.StartDateLocal
+		year, week := t.ISOWeek()
+		dbActivities = append(dbActivities, storage.SummaryRecord{
+			StravaID:    activity.Id,
+			Year:        year,
+			Month:       int(t.Month()),
+			Day:         t.Day(),
+			Week:        week,
+			Name:        activity.Name,
+			Type:        activity.Type.String(),
+			SportType:   activity.SportType,
+			WorkoutType: activity.WorkoutType(),
+			Distance:    activity.Distance,
+			Elevation:   activity.TotalElevationGain,
+			MovingTime:  activity.MovingTime,
+			ElapsedTime: activity.ElapsedTime,
+		})
+	}
+	return dbActivities
+}
+
+func getDbBestEfforts(activities []stravaapi.ActivityDetailed) []storage.BestEffortRecord {
+	dbEfforts := []storage.BestEffortRecord{}
+	for _, activity := range activities {
+		for _, be := range activity.BestEfforts {
+			dbEfforts = append(dbEfforts, storage.BestEffortRecord{
+				StravaID:    activity.Id,
+				Name:        be.Name,
+				MovingTime:  be.MovingTime,
+				ElapsedTime: be.ElapsedTime,
+				Distance:    int(be.Distance),
+			})
+		}
+	}
+	return dbEfforts
+}
+
+func getDbSplits(activities []stravaapi.ActivityDetailed) []storage.SplitRecord {
+	dbSplits := []storage.SplitRecord{}
+	for _, activity := range activities {
+		for _, split := range activity.SplitsMetric {
+			dbSplits = append(dbSplits, storage.SplitRecord{
+				StravaID:      activity.Id,
+				Split:         split.Split,
+				MovingTime:    split.MovingTime,
+				ElapsedTime:   split.ElapsedTime,
+				ElevationDiff: split.ElevationDifference,
+				Distance:      split.Distance,
+			})
+		}
+	}
+	return dbSplits
 }

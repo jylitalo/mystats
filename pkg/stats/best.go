@@ -30,7 +30,7 @@ func Best(ctx context.Context, db Storage, distance string, limit int) ([]string
 	if err != nil {
 		return nil, nil, telemetry.Error(span, fmt.Errorf("query caused: %w", err))
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	results := [][]string{}
 	for rows.Next() {
 		var year, month, day, movingTime, elapsedTime, totalTime, stravaID int

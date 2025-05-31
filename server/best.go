@@ -21,7 +21,7 @@ type BestFormData struct {
 }
 
 func newBestFormData(ctx context.Context, db Storage) (*BestFormData, error) {
-	ctx, span := telemetry.NewSpan(ctx, "server.newBestFormData")
+	_, span := telemetry.NewSpan(ctx, "server.newBestFormData")
 	defer span.End()
 	inOrder, err := db.QueryBestEffortDistances()
 	if err != nil {
@@ -33,9 +33,6 @@ func newBestFormData(ctx context.Context, db Storage) (*BestFormData, error) {
 	}
 	if len(inOrder) > 0 {
 		distances[inOrder[0]] = true
-	}
-	if err != nil {
-
 	}
 	return &BestFormData{
 		Distances: distances,
@@ -128,7 +125,7 @@ func bestPost(ctx context.Context, page *BestPage, db Storage) func(c echo.Conte
 		selected := selectedBestEfforts(page.Form.Distances)
 		page.Data.Data = []TableData{}
 		for _, distance := range page.Form.InOrder {
-			if !slices.Contains[[]string, string](selected, distance) {
+			if !slices.Contains(selected, distance) {
 				continue
 			}
 			if headers, rows, err := page.Data.stats(ctx, db, distance, page.Form.Limit); err != nil {

@@ -9,7 +9,10 @@ import (
 	"github.com/jylitalo/mystats/storage"
 )
 
-func List(ctx context.Context, db Storage, sports, workouts []string, years []int, limit int, name string) ([]string, [][]string, error) {
+func List(
+	ctx context.Context, db Storage, sports, workouts []string,
+	years []int, limit int, name string,
+) ([]string, [][]string, error) {
 	_, span := telemetry.NewSpan(ctx, "stats.List")
 	defer span.End()
 
@@ -17,15 +20,9 @@ func List(ctx context.Context, db Storage, sports, workouts []string, years []in
 		storage.WithTable(storage.SummaryTable),
 		storage.WithName(name),
 	}
-	for _, s := range sports {
-		opts = append(opts, storage.WithSport(s))
-	}
-	for _, w := range workouts {
-		opts = append(opts, storage.WithWorkout(w))
-	}
-	for _, y := range years {
-		opts = append(opts, storage.WithYear(y))
-	}
+	opts = append(opts, storage.WithSports(sports...))
+	opts = append(opts, storage.WithWorkouts(workouts...))
+	opts = append(opts, storage.WithYears(years...))
 	o := []string{"Year", "Month", "Day", "StravaID"}
 	opts = append(opts, storage.WithOrder(storage.OrderConfig{GroupBy: o, OrderBy: o, Limit: limit}))
 	rows, err := db.Query(
@@ -37,7 +34,7 @@ func List(ctx context.Context, db Storage, sports, workouts []string, years []in
 	if rows == nil || err != nil {
 		return nil, nil, telemetry.Error(span, fmt.Errorf("query caused: %w", err))
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	results := [][]string{}
 	for rows.Next() {
 		var year, month, day, elapsedTime, stravaID int
@@ -76,7 +73,7 @@ func Split(ctx context.Context, db Storage, id int64) ([]string, [][]string, err
 	if err != nil {
 		return nil, nil, telemetry.Error(span, fmt.Errorf("query caused: %w", err))
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	results := [][]string{}
 	for rows.Next() {
 		var split, elapsedTime int

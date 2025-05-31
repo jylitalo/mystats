@@ -1,4 +1,4 @@
-package server
+package server //nolint:testpackage
 
 import (
 	"bufio"
@@ -40,10 +40,15 @@ func TestTemplateRender(t *testing.T) {
 	p, err := newPage(
 		ctx, db,
 		func(pc *pageConfig) {
-			pc.bestStats = func(ctx context.Context, db stats.Storage, distance string, limit int) ([]string, [][]string, error) {
+			pc.bestStats = func(
+				ctx context.Context, db stats.Storage, distance string, limit int,
+			) ([]string, [][]string, error) {
 				return nil, nil, nil
 			}
-			pc.listStats = func(ctx context.Context, db stats.Storage, sports, workouts []string, years []int, limit int, name string) ([]string, [][]string, error) {
+			pc.listStats = func(
+				ctx context.Context, db stats.Storage, sports, workouts []string, years []int,
+				limit int, name string,
+			) ([]string, [][]string, error) {
 				return nil, nil, nil
 			}
 			pc.plotStats = func(
@@ -67,7 +72,7 @@ func TestTemplateRender(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	err = p.Plot.render(ctx, &testDB{}, map[string]bool{"Run": true}, nil, 6, 12, map[int]bool{2024: true}, "month")
+	err = p.Plot.render(ctx, &testDB{}, []string{"Run"}, nil, 6, 12, map[int]bool{2024: true}, "month")
 	if err != nil {
 		t.Error(err)
 	}

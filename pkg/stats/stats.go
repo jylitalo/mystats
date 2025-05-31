@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/jylitalo/mystats/pkg/telemetry"
@@ -22,6 +23,16 @@ func Stats(
 	_, span := telemetry.NewSpan(ctx, "stats.Stats")
 	defer span.End()
 
+	if years == nil {
+		var err error
+		if years, err = db.QueryYears(); err != nil {
+			return nil, nil, nil, telemetry.Error(span, err)
+		}
+	}
+	yearIndex := map[int]int{}
+	for idx, year := range years {
+		yearIndex[year] = idx
+	}
 	inYear := map[string]int{
 		"month": 12,
 		"week":  53,
@@ -30,55 +41,27 @@ func Stats(
 		return nil, nil, nil, telemetry.Error(span, fmt.Errorf("unknown period: %s", period))
 	}
 	results := make([][]string, inYear[period])
-	years, err := db.QueryYears()
-	if err != nil {
-		return nil, nil, nil, telemetry.Error(span, err)
-	}
-	yearIndex := map[int]int{}
-	for idx, year := range years {
-		yearIndex[year] = idx
-	}
 	columns := len(years)
 	for idx := range results {
-		results[idx] = make([]string, columns)
-		for year := range columns { // helps CSV formatting
-			results[idx][year] = "    "
-		}
+		results[idx] = slices.Repeat([]string{"    "}, columns) // helps CSV formatting
 	}
-	if strings.Contains(measure, "(time)") {
-		measure = strings.ReplaceAll(measure, "(time)", "(elapsedtime)")
-	}
+	measure = strings.ReplaceAll(measure, "(time)", "(elapsedtime)")
 	o := []string{period, "year"}
 	opts := []storage.QueryOption{
 		storage.WithTable(storage.SummaryTable),
 		storage.WithDayOfYear(day, month),
 		storage.WithOrder(storage.OrderConfig{GroupBy: o, OrderBy: o}),
-	}
-	for _, s := range sports {
-		opts = append(opts, storage.WithSport(s))
-	}
-	for _, w := range workouts {
-		opts = append(opts, storage.WithWorkout(w))
-	}
-	for _, y := range years {
-		opts = append(opts, storage.WithYear(y))
+		storage.WithSports(sports...),
+		storage.WithWorkouts(workouts...),
+		storage.WithYears(years...),
 	}
 	rows, err := db.Query([]string{"Year", period, measure}, opts...)
 	if err != nil {
 		return nil, nil, nil, telemetry.Error(span, fmt.Errorf("select caused: %w", err))
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	totalsAbs := make([]float64, len(years))
-	modifier := float64(1)
-	unit := "%4.0fm"
-	switch {
-	case strings.Contains(measure, "distance") && !strings.Contains(measure, "count"):
-		modifier = 1000
-		unit = "%4.1fkm"
-	case strings.Contains(measure, "time") && !strings.Contains(measure, "count"):
-		modifier = 3600
-		unit = "%4.1fh"
-	}
+	modifier, unit := getModifier(measure)
 	for rows.Next() {
 		var year, periodValue int
 		var measureValue float64
@@ -93,4 +76,19 @@ func Stats(
 		totals[idx] = fmt.Sprintf(unit, totalsAbs[idx])
 	}
 	return years, results, totals, nil
+}
+
+func getModifier(measure string) (float64, string) {
+	modifier := float64(1)
+	unit := "%4.0fm"
+	switch {
+	case strings.Contains(measure, "count"):
+	case strings.Contains(measure, "distance"):
+		modifier = 1000
+		unit = "%4.1fkm"
+	case strings.Contains(measure, "time"):
+		modifier = 3600
+		unit = "%4.1fh"
+	}
+	return modifier, unit
 }

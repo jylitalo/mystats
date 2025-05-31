@@ -27,7 +27,7 @@ func listCmd(types []string) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer db.Close()
+			defer func() { _ = db.Close() }()
 			table := tablewriter.NewWriter(os.Stdout)
 			headers, results, err := stats.List(ctx, db, types, workouts, nil, limit, name)
 			if err != nil {
