@@ -43,7 +43,7 @@ jobs:
         run: make test/unit
 
       - name: make build
-        run: make build
+        run: make bin
 
       - uses: actions/cache/save@v4
         if: ${{ env.IS_MAIN }}
