@@ -37,7 +37,7 @@ jobs:
           cache: false
 
       - name: Run linters
-        run: make lint
+        run: env GOTOOLCHAIN=local go mod tidy && make lint
 
       - name: Run tests
         run: make test/unit
