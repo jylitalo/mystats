@@ -458,7 +458,6 @@ func (sq *Sqlite3) QueryBestEffortDistances() ([]string, error) {
 		WithTable(BestEffortTable),
 		WithOrder(OrderConfig{OrderBy: []string{"distance desc"}}),
 	)
-	slog.Info("storage.Query", "query", query)
 	rows, err := sq.db.Query(query, values...)
 	if err != nil {
 		return nil, fmt.Errorf("%s failed: %w", query, err)
