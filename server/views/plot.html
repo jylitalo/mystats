@@ -62,6 +62,9 @@
         google.charts.setOnLoadCallback(plotDrawLineColors);
         resizeList.push(plotDrawLineColors);
         function plotDrawLineColors() {
+            if (google?.visualization?.DataTable === undefined) {
+                return
+            }
             const body = document.body;
             const isDark = body.classList.contains('dark') ||
                 (!body.classList.contains('light') &&

@@ -49,10 +49,14 @@
         google.charts.setOnLoadCallback(hrDrawLineColors);
         resizeList.push(hrDrawLineColors);
         function hrDrawLineColors() {
+            if (google?.visualization?.DataTable === undefined) {
+                return
+            }
             const body = document.body;
             const isDark = body.classList.contains('dark') ||
                 (!body.classList.contains('light') &&
                 window.matchMedia('(prefers-color-scheme: dark)').matches);
+            var data = new google.visualization.DataTable();
             var options = {
                 height: 750,
                 width: '100%',
