@@ -49,15 +49,23 @@
         google.charts.setOnLoadCallback(hrDrawLineColors);
         resizeList.push(hrDrawLineColors);
         function hrDrawLineColors() {
-            var data = new google.visualization.DataTable();
+            const body = document.body;
+            const isDark = body.classList.contains('dark') ||
+                (!body.classList.contains('light') &&
+                window.matchMedia('(prefers-color-scheme: dark)').matches);
             var options = {
                 height: 750,
                 width: '100%',
                 hAxis: { title: 'days', format: 'MMM dd' },
                 vAxis: { title: 'Daily heartrate (bpm)' },
-                colors: {{ .ScriptColors }}
+                colors: {{ .ScriptColors }},
+                backgroundColor: 'transparent',
+                legendTextStyle: { color: isDark ? '#ffffff' : '#000000' },
+                titleTextStyle: { color: isDark ? '#ffffff' : '#000000' },
+                pieSliceTextStyle: { color: isDark ? '#ffffff' : '#000000' }
             };
 
+            var data = new google.visualization.DataTable();
             data.addColumn('date', 'X');
             {{ range $year := .ScriptColumns -}}
             data.addColumn('number', '{{$year}}');

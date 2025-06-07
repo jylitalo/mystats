@@ -25,6 +25,7 @@
         {{ $plot := "Plot" -}}
         {{ $steps := "Steps" -}}
         {{ $top := "Top" -}}
+        <button id="theme-toggle">Toggle Theme</button>
         <div class="tab">
             <button class="tablinks" onclick="openTab(event, '{{ $plot }}')" id="defaultOpen">Plot</button>
             <button class="tablinks" onclick="openTab(event, '{{ $best }}')">Strava's Running PBs</button>
@@ -52,6 +53,14 @@
             {{ template "heartrate-tab" .HeartRate }}
         </div>
         <script>
+            const toggleButton = document.getElementById('theme-toggle');
+            const savedTheme = localStorage.getItem('theme');
+            if (savedTheme === 'dark') {
+            body.classList.add('dark');
+            } else if (savedTheme === 'light') {
+            body.classList.add('light');
+            }
+
             function openTab(evt, tabName) {
               // Declare all variables
               var i, tabcontent, tablinks;
