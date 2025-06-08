@@ -51,15 +51,10 @@
         google.charts.setOnLoadCallback(stepsDrawLineColors);
         resizeList.push(stepsDrawLineColors);
         function stepsDrawLineColors() {
+            if (google?.visualization?.DataTable === undefined) {
+                return
+            }
             var data = new google.visualization.DataTable();
-            var options = {
-                height: 750,
-                width: '100%',
-                hAxis: { title: 'days', format: 'MMM dd' },
-                vAxis: { title: 'Daily steps' },
-                colors: {{ .ScriptColors }}
-            };
-
             data.addColumn('date', 'X');
             {{ range $year := .ScriptColumns -}}
             data.addColumn('number', '{{$year}}');
@@ -68,7 +63,7 @@
             var formatter = new google.visualization.DateFormat({pattern: 'MMM dd'});
             formatter.format(data, 0);
             var chart = new google.visualization.LineChart(document.getElementById('steps_div'));
-            chart.draw(data, options);
+            chart.draw(data, chartOptions('Daily steps'));
         };
     </script>
     <div class="chart" id="steps_div"></div>

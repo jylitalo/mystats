@@ -65,26 +65,6 @@
             if (google?.visualization?.DataTable === undefined) {
                 return
             }
-            const body = document.body;
-            const isDark = body.classList.contains('dark') ||
-                (!body.classList.contains('light') &&
-                window.matchMedia('(prefers-color-scheme: dark)').matches);
-            var options = {
-                height: 750,
-                hAxis: { title: 'days', format: 'MMM dd' },
-                vAxis: { title: 
-                    {{- if eq .Measure "time" }}"time (h)"
-                    {{- else if eq .Measure "distance" }}"distance (km)"
-                    {{- else if eq .Measure "elevation" }}"elevation (m)"
-                    {{- else }}{{ .Measure }}
-                    {{- end -}}
-                },
-                colors: {{ .ScriptColors }},
-                backgroundColor: 'transparent',
-                legendTextStyle: { color: isDark ? '#ffffff' : '#000000' },
-                titleTextStyle: { color: isDark ? '#ffffff' : '#000000' },
-                pieSliceTextStyle: { color: isDark ? '#ffffff' : '#000000' }
-            };
             var data = new google.visualization.DataTable();
             data.addColumn('date', 'X');
             {{ range $year := .ScriptColumns -}}
@@ -94,7 +74,13 @@
             var formatter = new google.visualization.DateFormat({pattern: 'MMM dd'});
             formatter.format(data, 0);
             var chart = new google.visualization.LineChart(document.getElementById('chart_div'));
-            chart.draw(data, options);
+            chart.draw(data, chartOptions(
+                        {{- if eq .Measure "time" }}"time (h)"
+                        {{- else if eq .Measure "distance" }}"distance (km)"
+                        {{- else if eq .Measure "elevation" }}"elevation (m)"
+                        {{- else }}{{ .Measure }}
+                        {{- end -}}
+            ))
         };
     </script>
     <div class="chart" id="chart_div"></div>

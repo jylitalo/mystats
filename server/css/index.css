@@ -1,3 +1,15 @@
+/* Dark Theme Variables */
+body.dark {
+  background-color: #121212;
+  color: #f0f0f0;
+}
+
+/* Light Theme Override */
+body.light {
+  background-color: #f0f6fc;
+  color: #0d1117;
+}
+
 button.press {
     align-items: center;
     background-color: #238636;
@@ -7,7 +19,7 @@ button.press {
     border-image: initial;
     border-color: rgba(240,246,252,0.1);
     box-shadow: var(--shadow-resting-small,var(--color-btn-primary-shadow,0 0 transparent));
-    color: #ffffff;
+    color: #f0f6fc;
     cursor: pointer;
     display: flex;
     font-family: inherit;
@@ -39,7 +51,7 @@ table {
 
 table thead tr {
     background-color: #238636;
-    color: #ffffff;
+    color: #f0f6fc;
     text-align: left;
 }
 
@@ -115,4 +127,11 @@ table tbody tr.active-row {
 @keyframes fadeEffect {
   from {opacity: 0;}
   to {opacity: 1;}
+}
+
+@media (prefers-color-scheme: light) {
+  body:not(.light):not(.dark) {
+    background-color: #121212;
+    color: #f0f0f0;
+  }
 }
