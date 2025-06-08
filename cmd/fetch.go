@@ -57,7 +57,7 @@ func fetch(ctx context.Context, best_efforts bool) error {
 	}
 	garminClient, err := garmin.NewAPI(cfg.Garmin.Username, cfg.Garmin.Password)
 	if err != nil {
-		return telemetry.Error(span, err)
+		return telemetry.Error(span, fmt.Errorf("garmin.NewAPI returned %w", err))
 	}
 	errSteps := getDailySteps(ctx, garminClient, cfg.Garmin.DailySteps)
 	errHR := getHeartRate(ctx, garminClient, cfg.Garmin.HeartRate)
