@@ -1,6 +1,8 @@
 module github.com/jylitalo/mystats
 
-go 1.24
+go 1.24.2
+
+toolchain go1.24.3
 
 tool (
 	github.com/golangci/golangci-lint/v2/cmd/golangci-lint
@@ -10,7 +12,7 @@ tool (
 )
 
 require (
-	github.com/jylitalo/go-garmin v0.0.0-20241227101223-4ce6b12cb376
+	github.com/jylitalo/go-garmin v0.1.0
 	github.com/labstack/echo/v4 v4.13.3
 	github.com/mattn/go-sqlite3 v1.14.28
 	github.com/olekukonko/tablewriter v0.0.5
