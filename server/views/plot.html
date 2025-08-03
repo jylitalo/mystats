@@ -65,6 +65,7 @@
             if (google?.visualization?.DataTable === undefined) {
                 return
             }
+            var options = chartOptions('Daily steps', {{ len .ScriptColumns }})
             var data = new google.visualization.DataTable();
             data.addColumn('date', 'X');
             {{ range $year := .ScriptColumns -}}
@@ -74,13 +75,7 @@
             var formatter = new google.visualization.DateFormat({pattern: 'MMM dd'});
             formatter.format(data, 0);
             var chart = new google.visualization.LineChart(document.getElementById('chart_div'));
-            chart.draw(data, chartOptions(
-                        {{- if eq .Measure "time" }}"time (h)"
-                        {{- else if eq .Measure "distance" }}"distance (km)"
-                        {{- else if eq .Measure "elevation" }}"elevation (m)"
-                        {{- else }}{{ .Measure }}
-                        {{- end -}}
-            ))
+            chart.draw(data, options)
         };
     </script>
     <div class="chart" id="chart_div"></div>

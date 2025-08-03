@@ -27,7 +27,6 @@
         {{ $plot := "Plot" -}}
         {{ $steps := "Steps" -}}
         {{ $top := "Top" -}}
-        <button id="theme-toggle">Toggle Theme</button>
         <div class="tab">
             <button class="tablinks" onclick="openTab(event, '{{ $plot }}')" id="defaultOpen">Plot</button>
             <button class="tablinks" onclick="openTab(event, '{{ $best }}')">Strava's Running PBs</button>
@@ -35,6 +34,7 @@
             <button class="tablinks" onclick="openTab(event, '{{ $top }}')">Top</button>
             <button class="tablinks" onclick="openTab(event, '{{ $steps }}')">Steps</button>
             <button class="tablinks" onclick="openTab(event, '{{ $hr }}')">Resting HR</button>
+            <button id="theme-toggle">Toggle Theme</button>
         </div>
         <div id="{{ $plot }}" class="tabcontent">
             {{ template "plot-tab" .Plot }}
@@ -58,27 +58,24 @@
             const savedTheme = localStorage.getItem('theme');
             if (savedTheme === 'dark') {
                 document.body.classList.add('dark');
-            } else if (savedTheme === 'light') {
+            } else {
                 document.body.classList.add('light');
             }
             const toggleButton = document.getElementById('theme-toggle');
             // Toggle theme and save preference
             toggleButton.addEventListener('click', () => {
-                console.log("toggleButton triggered")
                 if (document.body.classList.contains('dark')) {
                     console.log("classList dark")
                     document.body.classList.remove('dark');
                     document.body.classList.add('light');
                     localStorage.setItem('theme', 'light');
-                } else if (document.body.classList.contains('light')) {
+                } else {
                     console.log("classList light")
                     document.body.classList.remove('light');
-                    localStorage.removeItem('theme'); // fallback to system preference
-                } else {
-                    console.log("classList neither")
                     document.body.classList.add('dark');
                     localStorage.setItem('theme', 'dark');
                 }
+                resize()
             });
             function openTab(evt, tabName) {
               // Declare all variables
@@ -110,33 +107,35 @@
               }
             }
             document.getElementById("defaultOpen").click();
-            function chartOptions(vAxis) {
+            function chartOptions(vAxis, years) {
                 const body = document.body;
                 const isDark = body.classList.contains('dark') ||
                     (!body.classList.contains('light') &&
                     window.matchMedia('(prefers-color-scheme: dark)').matches);
+                const textColor = isDark ? "#f0f0f0" : "#0d1117"
+                const bgColor = isDark ? "#121212" : "#f0f6fc"
+                const colors = [
+                    "#0000ff", // 1
+                    "#00ff00", // 2
+                    "#ff0000", // 3
+                    "#00ffff", // 4
+                    "#ffff00", // 5
+                    "#ff00ff", // 6
+                    "#000088", // 7
+                    "#008800", // 8
+                    "#880000", // 9
+                    "#00f000",
+                    "#0000f0",
+                ]
+                const textStyle = { color: textColor }
                 return {
                     height: 750,
                     width: '100%',
-                    hAxis: { title: 'days', format: 'MMM dd' },
-                    vAxis: { title: vAxis },
-                    colors: [
-                        "#0000ff", // 1
-                        "#00ff00", // 2
-                        "#ff0000", // 3
-                        "#00ffff", // 4
-                        "#ffff00", // 5
-                        "#ff00ff", // 6
-                        "#000088", // 7
-                        "#008800", // 8
-                        "#880000", // 9
-                        "#00f000",
-                        "#0000f0",
-                    ],
+                    hAxis: { title: 'days', format: 'MMM dd', textStyle: textStyle, titleTextStyle: textStyle},
+                    vAxis: { title: vAxis, textStyle: textStyle, titleTextStyle: textStyle},
+                    colors: colors.slice(0, years),
                     backgroundColor: 'transparent',
-                    legendTextStyle: { color: isDark ? '#ffffff' : '#000000' },
-                    titleTextStyle: { color: isDark ? '#ffffff' : '#000000' },
-                    pieSliceTextStyle: { color: isDark ? '#ffffff' : '#000000' }
+                    legendTextStyle: textStyle
                 }
             }
         </script>

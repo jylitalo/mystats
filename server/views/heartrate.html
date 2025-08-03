@@ -61,7 +61,7 @@
             var formatter = new google.visualization.DateFormat({pattern: 'MMM dd'});
             formatter.format(data, 0);
             var chart = new google.visualization.LineChart(document.getElementById('heartrate_div'));
-            chart.draw(data, chartOptions('Daily heartrate (bpm)'));
+            chart.draw(data, chartOptions('Daily heartrate (bpm)', {{ len .ScriptColumns }}));
         };
     </script>
     <div class="chart" id="heartrate_div"></div>

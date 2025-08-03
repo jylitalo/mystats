@@ -63,7 +63,7 @@
             var formatter = new google.visualization.DateFormat({pattern: 'MMM dd'});
             formatter.format(data, 0);
             var chart = new google.visualization.LineChart(document.getElementById('steps_div'));
-            chart.draw(data, chartOptions('Daily steps'));
+            chart.draw(data, chartOptions('Daily steps', {{ len .ScriptColumns }}));
         };
     </script>
     <div class="chart" id="steps_div"></div>
