@@ -160,6 +160,7 @@ func heartRatePost(ctx context.Context, page *HeartRatePage, db Storage) func(c 
 	}
 }
 
+// getHeartRate fetches year to date values from storage.
 func getHeartRate(ctx context.Context, db Storage, month, day int, years []int) (numbers, error) {
 	_, span := telemetry.NewSpan(ctx, "server.getHeartRate")
 	defer span.End()
@@ -171,6 +172,7 @@ func getHeartRate(ctx context.Context, db Storage, month, day int, years []int) 
 	return absoluteScan(rows, years)
 }
 
+// absoluteScan tries to ensure that we have some value for each year-to-day for all years.
 func absoluteScan(rows *sql.Rows, years []int) (numbers, error) {
 	tz, _ := time.LoadLocation("Europe/Helsinki")
 	day1 := map[int]time.Time{}
