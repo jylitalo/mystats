@@ -14,10 +14,12 @@
             google.charts.load('current', {'packages':['corechart', 'line']});
             var resizeList = [];
             function resize () {
+                console.log("resize called")
                 resizeList.forEach(element => { element() });
             };
             window.onload = resize;
             window.onresize = resize;
+            window.addEventListener('DOMContentLoaded', resize);
         </script>
         {{ $best := "Best" -}}
         {{ $hr := "HR" -}}
@@ -32,6 +34,7 @@
             <button class="tablinks" onclick="openTab(event, '{{ $top }}')">Top</button>
             <button class="tablinks" onclick="openTab(event, '{{ $steps }}')">Steps</button>
             <button class="tablinks" onclick="openTab(event, '{{ $hr }}')">Resting HR</button>
+            <button id="theme-toggle">Toggle Theme</button>
         </div>
         <div id="{{ $plot }}" class="tabcontent">
             {{ template "plot-tab" .Plot }}
@@ -52,6 +55,28 @@
             {{ template "heartrate-tab" .HeartRate }}
         </div>
         <script>
+            const savedTheme = localStorage.getItem('theme');
+            if (savedTheme === 'dark') {
+                document.body.classList.add('dark');
+            } else {
+                document.body.classList.add('light');
+            }
+            const toggleButton = document.getElementById('theme-toggle');
+            // Toggle theme and save preference
+            toggleButton.addEventListener('click', () => {
+                if (document.body.classList.contains('dark')) {
+                    console.log("classList dark")
+                    document.body.classList.remove('dark');
+                    document.body.classList.add('light');
+                    localStorage.setItem('theme', 'light');
+                } else {
+                    console.log("classList light")
+                    document.body.classList.remove('light');
+                    document.body.classList.add('dark');
+                    localStorage.setItem('theme', 'dark');
+                }
+                resize()
+            });
             function openTab(evt, tabName) {
               // Declare all variables
               var i, tabcontent, tablinks;
@@ -82,6 +107,37 @@
               }
             }
             document.getElementById("defaultOpen").click();
+            function chartOptions(vAxis, years) {
+                const body = document.body;
+                const isDark = body.classList.contains('dark') ||
+                    (!body.classList.contains('light') &&
+                    window.matchMedia('(prefers-color-scheme: dark)').matches);
+                const textColor = isDark ? "#f0f0f0" : "#0d1117"
+                const bgColor = isDark ? "#121212" : "#f0f6fc"
+                const colors = [
+                    "#0000ff", // 1
+                    "#00ff00", // 2
+                    "#ff0000", // 3
+                    "#00ffff", // 4
+                    "#ffff00", // 5
+                    "#ff00ff", // 6
+                    "#000088", // 7
+                    "#008800", // 8
+                    "#880000", // 9
+                    "#00f000",
+                    "#0000f0",
+                ]
+                const textStyle = { color: textColor }
+                return {
+                    height: 750,
+                    width: '100%',
+                    hAxis: { title: 'days', format: 'MMM dd', textStyle: textStyle, titleTextStyle: textStyle},
+                    vAxis: { title: vAxis, textStyle: textStyle, titleTextStyle: textStyle},
+                    colors: colors.slice(0, years),
+                    backgroundColor: 'transparent',
+                    legendTextStyle: textStyle
+                }
+            }
         </script>
     </body>
 </html>

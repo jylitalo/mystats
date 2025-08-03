@@ -123,7 +123,7 @@ func (p *HeartRatePage) render(
 		// Month in JavaScript's Date is 0-indexed
 		newDate := fmt.Sprintf("new Date(%d, %d, %d)", index0.Year(), index0.Month()-1, index0.Day())
 		scriptRows[day][0] = template.JS(newDate) // #nosec G203
-		start := max(0, day-avg)
+		start := max(0, day-avg)                  // avg is reference to how many days average we use as measurement
 		for idx, year := range foundYears {
 			end := min(day+avg, len(numbers[year])-1)
 			scriptRows[day][idx+1] = average(numbers[year][start : end+1])
@@ -160,6 +160,7 @@ func heartRatePost(ctx context.Context, page *HeartRatePage, db Storage) func(c 
 	}
 }
 
+// getHeartRate fetches year to date values from storage.
 func getHeartRate(ctx context.Context, db Storage, month, day int, years []int) (numbers, error) {
 	_, span := telemetry.NewSpan(ctx, "server.getHeartRate")
 	defer span.End()
@@ -171,6 +172,7 @@ func getHeartRate(ctx context.Context, db Storage, month, day int, years []int) 
 	return absoluteScan(rows, years)
 }
 
+// absoluteScan tries to ensure that we have some value for each year-to-day for all years.
 func absoluteScan(rows *sql.Rows, years []int) (numbers, error) {
 	tz, _ := time.LoadLocation("Europe/Helsinki")
 	day1 := map[int]time.Time{}
@@ -204,8 +206,8 @@ func absoluteScan(rows *sql.Rows, years []int) (numbers, error) {
 		for x := yslen; x < days-1; x++ { // fill the gaps on days that didn't have activities
 			ys[year] = append(ys[year], previous_y[year])
 		}
-		max_acts = max(max_acts, days)
 		ys[year] = append(ys[year], value)
+		max_acts = max(max_acts, len(ys[year]))
 		previous_y[year] = value
 	}
 	for _, year := range years { // fill the end of year

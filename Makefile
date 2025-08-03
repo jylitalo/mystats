@@ -30,7 +30,7 @@ bin: ## Build binary
 .PHONY: run/bin
 run/bin: bin # telemetry-up db-up ## Run application binary
 	${APP_ENV_VARS} \
-	${TARGET_BIN} server
+	${TARGET_BIN} server --update=False
 
 .PHONY: test
 test: test/unit # test/app ## Run all tests and show coverage
