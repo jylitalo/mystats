@@ -4,11 +4,11 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"net/http"
 	"strconv"
 
 	"github.com/jylitalo/mystats/pkg/stats"
 	"github.com/jylitalo/mystats/pkg/telemetry"
-	"github.com/labstack/echo/v4"
 )
 
 type TopFormData struct {
@@ -84,23 +84,29 @@ func newTopPage(
 	return &TopPage{Form: form, Data: data}, err
 }
 
-func topPost(ctx context.Context, page *TopPage, db Storage) func(c echo.Context) error {
-	return func(c echo.Context) error {
+func topPost(ctx context.Context, renderer *Template, page *TopPage, db Storage) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		var err, errL, errS, errW, errY error
 
 		ctx, span := telemetry.NewSpan(ctx, "topPOST")
 		defer span.End()
-		values, err := c.FormParams()
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "Invalid form data", http.StatusBadRequest)
+			_ = telemetry.Error(span, err)
+			return
+		}
+		values := r.Form
 		slog.Info("POST /top", "values", values)
 		page.Form.Sports, errS = sportsValues(values)
 		page.Form.Workouts, errW = workoutsValues(values)
 		page.Form.Years, errY = yearValues(values)
-		page.Form.Limit, errL = strconv.Atoi(c.FormValue("limit"))
+		page.Form.Limit, errL = strconv.Atoi(r.FormValue("limit"))
 		if err = errors.Join(err, errS, errW, errY, errL); err != nil {
-			return telemetry.Error(span, err)
+			_ = telemetry.Error(span, err)
+			return
 		}
-		page.Form.Measure = c.FormValue("Measure")
-		page.Form.Period = c.FormValue("Period")
+		page.Form.Measure = r.FormValue("Measure")
+		page.Form.Period = r.FormValue("Period")
 		page.Data, err = newTopData(
 			ctx, db, page.Form.Measure, page.Form.Period,
 			selectedSports(page.Form.Sports),
@@ -109,8 +115,13 @@ func topPost(ctx context.Context, page *TopPage, db Storage) func(c echo.Context
 			page.Data.stats,
 		)
 		if err != nil {
-			return telemetry.Error(span, err)
+			_ = telemetry.Error(span, err)
+			return
 		}
-		return telemetry.Error(span, errors.Join(err, c.Render(200, "top-data", page.Data)))
+		if err := renderer.tmpl.ExecuteTemplate(w, "top-data", page.Data); err != nil {
+			_ = telemetry.Error(span, err)
+			http.Error(w, "Template rendering failed", http.StatusInternalServerError)
+			return
+		}
 	}
 }

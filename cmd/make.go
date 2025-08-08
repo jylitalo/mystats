@@ -20,11 +20,11 @@ import (
 )
 
 type Storage interface {
-	QueryBestEffortDistances() ([]string, error)
-	QuerySports() ([]string, error)
-	QueryWorkouts() ([]string, error)
-	QueryYears(opts ...storage.QueryOption) ([]int, error)
-	Query(fields []string, opts ...storage.QueryOption) (*sql.Rows, error)
+	QueryBestEffortDistances(ctx context.Context) ([]string, error)
+	QuerySports(ctx context.Context) ([]string, error)
+	QueryWorkouts(ctx context.Context) ([]string, error)
+	QueryYears(ctx context.Context, opts ...storage.QueryOption) ([]int, error)
+	Query(ctx context.Context, fields []string, opts ...storage.QueryOption) (*sql.Rows, error)
 	Close() error
 }
 

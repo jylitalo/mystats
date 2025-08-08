@@ -44,7 +44,7 @@ func Top(
 		storage.WithWorkouts(workouts...),
 		storage.WithYears(years...),
 	}
-	rows, err := db.Query([]string{m + " as total", "year", period}, opts...)
+	rows, err := db.Query(ctx, []string{m + " as total", "year", period}, opts...)
 	if err != nil {
 		return nil, nil, telemetry.Error(span, fmt.Errorf("select caused: %w", err))
 	}

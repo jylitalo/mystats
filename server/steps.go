@@ -8,12 +8,11 @@ import (
 	"html/template"
 	"log/slog"
 	"maps"
+	"net/http"
 	"slices"
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/labstack/echo/v4"
 
 	"github.com/jylitalo/mystats/pkg/data"
 	"github.com/jylitalo/mystats/pkg/telemetry"
@@ -80,7 +79,7 @@ func stepsStats(
 		return nil, nil, nil, telemetry.Error(span, fmt.Errorf("unknown period: %s", period))
 	}
 	results := make([][]string, inYear[period])
-	years, err := db.QueryYears(opts...)
+	years, err := db.QueryYears(ctx, opts...)
 	if err != nil {
 		return nil, nil, nil, telemetry.Error(span, err)
 	}
@@ -95,7 +94,7 @@ func stepsStats(
 			results[idx][year] = "    "
 		}
 	}
-	rows, err := db.Query([]string{"year", period, "sum(totalsteps)"}, opts...)
+	rows, err := db.Query(ctx, []string{"year", period, "sum(totalsteps)"}, opts...)
 	if err != nil {
 		return nil, nil, nil, telemetry.Error(span, fmt.Errorf("select caused: %w", err))
 	}
@@ -204,24 +203,36 @@ func (p *StepsPage) render(
 	return nil
 }
 
-func stepsPost(ctx context.Context, page *StepsPage, db Storage) func(c echo.Context) error {
-	return func(c echo.Context) error {
+func stepsPost(ctx context.Context, renderer *Template, page *StepsPage, db Storage) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		_, span := telemetry.NewSpan(ctx, "stepsPOST")
 		defer span.End()
-		month, errM := strconv.Atoi(c.FormValue("EndMonth"))
-		day, errD := strconv.Atoi(c.FormValue("EndDay"))
-		page.Data.Period = c.FormValue("Period")
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "Invalid form data", http.StatusBadRequest)
+			_ = telemetry.Error(span, err)
+			return
+		}
+		month, errM := strconv.Atoi(r.FormValue("EndMonth"))
+		day, errD := strconv.Atoi(r.FormValue("EndDay"))
+		page.Data.Period = r.FormValue("Period")
 		page.Form.Period = page.Data.Period
-		values, errV := c.FormParams()
+		values := r.Form
 		years, errY := yearValues(values)
-		if err := errors.Join(errM, errD, errV, errY); err != nil {
-			return telemetry.Error(span, err)
+		if err := errors.Join(errM, errD, errY); err != nil {
+			_ = telemetry.Error(span, err)
+			return
 		}
 		slog.Info("POST /steps", "values", values)
-		return telemetry.Error(span, errors.Join(
-			page.render(ctx, db, month, day, years, page.Data.Period),
-			c.Render(200, "steps-data", page.Data),
-		))
+		err := page.render(ctx, db, month, day, years, page.Data.Period)
+		if err != nil {
+			_ = telemetry.Error(span, err)
+			return
+		}
+		if err := renderer.tmpl.ExecuteTemplate(w, "step-data", page.Data); err != nil {
+			_ = telemetry.Error(span, err)
+			http.Error(w, "Template rendering failed", http.StatusInternalServerError)
+			return
+		}
 	}
 }
 
@@ -229,7 +240,7 @@ func getSteps(ctx context.Context, db Storage, month, day int, years []int) (num
 	_, span := telemetry.NewSpan(ctx, "server.getSteps")
 	defer span.End()
 
-	years, rows, err := yearToDateQuery(db, day, month, years, storage.DailyStepsTable, "TotalSteps")
+	years, rows, err := yearToDateQuery(ctx, db, day, month, years, storage.DailyStepsTable, "TotalSteps")
 	if err != nil {
 		return nil, telemetry.Error(span, err)
 	}

@@ -449,7 +449,7 @@ func sortingOrder(order *OrderConfig) string {
 	return sorting
 }
 
-func (sq *Sqlite3) QueryBestEffortDistances() ([]string, error) {
+func (sq *Sqlite3) QueryBestEffortDistances(ctx context.Context) ([]string, error) {
 	if sq.db == nil {
 		return nil, errors.New("database is nil")
 	}
@@ -458,7 +458,7 @@ func (sq *Sqlite3) QueryBestEffortDistances() ([]string, error) {
 		WithTable(BestEffortTable),
 		WithOrder(OrderConfig{OrderBy: []string{"distance desc"}}),
 	)
-	rows, err := sq.db.Query(query, values...)
+	rows, err := sq.db.QueryContext(ctx, query, values...)
 	if err != nil {
 		return nil, fmt.Errorf("%s failed: %w", query, err)
 	}
@@ -476,7 +476,7 @@ func (sq *Sqlite3) QueryBestEffortDistances() ([]string, error) {
 }
 
 // QueryTypes creates list of distinct years from which have records
-func (sq *Sqlite3) QuerySports() ([]string, error) {
+func (sq *Sqlite3) QuerySports(ctx context.Context) ([]string, error) {
 	if sq.db == nil {
 		return nil, errors.New("database is nil")
 	}
@@ -486,7 +486,7 @@ func (sq *Sqlite3) QuerySports() ([]string, error) {
 		WithOrder(OrderConfig{GroupBy: []string{"type"}, OrderBy: []string{"type"}}),
 	)
 	// slog.Info("storage.Query", "query", query)
-	rows, err := sq.db.Query(query, values...)
+	rows, err := sq.db.QueryContext(ctx, query, values...)
 	sports := []string{}
 	if err != nil {
 		return sports, fmt.Errorf("select caused: %w", err)
@@ -503,7 +503,7 @@ func (sq *Sqlite3) QuerySports() ([]string, error) {
 }
 
 // QueryTypes creates list of distinct years from which have records
-func (sq *Sqlite3) QueryWorkouts() ([]string, error) {
+func (sq *Sqlite3) QueryWorkouts(ctx context.Context) ([]string, error) {
 	if sq.db == nil {
 		return nil, errors.New("database is nil")
 	}
@@ -514,7 +514,7 @@ func (sq *Sqlite3) QueryWorkouts() ([]string, error) {
 		WithOrder(OrderConfig{GroupBy: o, OrderBy: o}),
 	)
 	// slog.Info("storage.Query", "query", query)
-	rows, err := sq.db.Query(query, values...)
+	rows, err := sq.db.QueryContext(ctx, query, values...)
 	workouts := []string{}
 	if err != nil {
 		return workouts, fmt.Errorf("select caused: %w", err)
@@ -531,7 +531,7 @@ func (sq *Sqlite3) QueryWorkouts() ([]string, error) {
 }
 
 // QueryYears creates list of distinct years from which have records
-func (sq *Sqlite3) QueryYears(opts ...QueryOption) ([]int, error) {
+func (sq *Sqlite3) QueryYears(ctx context.Context, opts ...QueryOption) ([]int, error) {
 	if sq.db == nil {
 		return nil, errors.New("database is nil")
 	}
@@ -546,7 +546,7 @@ func (sq *Sqlite3) QueryYears(opts ...QueryOption) ([]int, error) {
 		[]string{"distinct(Year)"}, opts...,
 	)
 	// slog.Info("storage.Query", "query", query)
-	rows, err := sq.db.Query(query, values...)
+	rows, err := sq.db.QueryContext(ctx, query, values...)
 	if err != nil {
 		return nil, fmt.Errorf("%s failed: %w", query, err)
 	}
@@ -562,7 +562,7 @@ func (sq *Sqlite3) QueryYears(opts ...QueryOption) ([]int, error) {
 	return years, nil
 }
 
-func (sq *Sqlite3) Query(fields []string, opts ...QueryOption) (*sql.Rows, error) {
+func (sq *Sqlite3) Query(ctx context.Context, fields []string, opts ...QueryOption) (*sql.Rows, error) {
 	if sq.db == nil {
 		return nil, errors.New("database is nil")
 	}
@@ -573,7 +573,7 @@ func (sq *Sqlite3) Query(fields []string, opts ...QueryOption) (*sql.Rows, error
 		opts = append(opts, WithTable(SummaryTable))
 	}
 	query, values := sqlQuery(fields, opts...)
-	return sq.db.Query(query, values...)
+	return sq.db.QueryContext(ctx, query, values...)
 }
 
 func (sq *Sqlite3) Close() error {

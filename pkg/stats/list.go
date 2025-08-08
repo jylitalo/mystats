@@ -26,6 +26,7 @@ func List(
 	o := []string{"Year", "Month", "Day", "StravaID"}
 	opts = append(opts, storage.WithOrder(storage.OrderConfig{GroupBy: o, OrderBy: o, Limit: limit}))
 	rows, err := db.Query(
+		ctx,
 		[]string{
 			"Year", "Month", "Day", "Name", "Distance", "Elevation", "Elapsedtime",
 			"Type", "Workouttype", "StravaID",
@@ -67,6 +68,7 @@ func Split(ctx context.Context, db Storage, id int64) ([]string, [][]string, err
 	defer span.End()
 
 	rows, err := db.Query(
+		ctx,
 		[]string{"split", "elapsedtime", "elevationdiff"},
 		storage.WithTable(storage.SplitTable), storage.WithStravaID(id),
 	)

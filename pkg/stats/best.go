@@ -14,6 +14,7 @@ func Best(ctx context.Context, db Storage, distance string, limit int) ([]string
 
 	o := []string{storage.BestEffortTable + ".Movingtime", "Year", "Month", "Day"}
 	rows, err := db.Query(
+		ctx,
 		[]string{
 			"Year", "Month", "Day",
 			storage.SummaryTable + ".Name",
