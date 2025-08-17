@@ -240,7 +240,9 @@ func yearValues(values url.Values) (map[int]bool, error) {
 	return years, nil
 }
 
-func yearToDateQuery(ctx context.Context, db Storage, day, month int, years []int, table, column string) ([]int, *sql.Rows, error) {
+func yearToDateQuery(
+	ctx context.Context, db Storage, day, month int, years []int, table, column string,
+) ([]int, *sql.Rows, error) {
 	o := []string{"year", "month", "day"}
 	opts := []storage.QueryOption{
 		storage.WithDayOfYear(day, month),
@@ -276,8 +278,15 @@ func Start(ctx context.Context, db Storage, sports []string, port int) error {
 	mux.HandleFunc("/plot", plotPost(ctx, renderer, page.Plot, db))
 	mux.HandleFunc("/top", topPost(ctx, renderer, page.Top, db))
 	mux.HandleFunc("/steps", stepsPost(ctx, renderer, page.Steps, db))
+	srv := &http.Server{
+		Addr:         "127.0.0.1:" + strconv.Itoa(port),
+		Handler:      mux,              // replace with your mux/router
+		ReadTimeout:  10 * time.Second, // max time to read request headers/body
+		WriteTimeout: 10 * time.Second, // max time to write response
+		IdleTimeout:  60 * time.Second, // keep-alive idle connections
+	}
 	slog.Info("server.Start", "Listening on", port)
-	return http.ListenAndServe("127.0.0.1:"+strconv.Itoa(port), mux)
+	return srv.ListenAndServe()
 }
 
 func indexGet(ctx context.Context, renderer *Template, page *Page) http.HandlerFunc {
@@ -288,7 +297,7 @@ func indexGet(ctx context.Context, renderer *Template, page *Page) http.HandlerF
 		err := renderer.tmpl.ExecuteTemplate(w, "index", page)
 		if err != nil {
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-			telemetry.Error(span, err)
+			_ = telemetry.Error(span, err)
 		}
 	}
 }

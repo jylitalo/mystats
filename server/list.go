@@ -102,6 +102,7 @@ func listPost(ctx context.Context, renderer *Template, page *ListPage, db Storag
 		limit, errL := strconv.Atoi(r.FormValue("limit"))
 		name := r.FormValue("name")
 		if err = errors.Join(errT, errW, errY, errL); err != nil {
+			http.Error(w, "Error with arguments", http.StatusBadRequest)
 			slog.Error("server.listPost()", "err", err)
 			_ = telemetry.Error(span, err)
 		}
@@ -111,9 +112,13 @@ func listPost(ctx context.Context, renderer *Template, page *ListPage, db Storag
 			ctx, db, selectedSports(sports), selectedWorkouts(workouts),
 			selectedYears(years), limit, name,
 		)
-		if err := renderer.tmpl.ExecuteTemplate(w, "list-data", page.Data); err != nil {
+		if err != nil {
+			http.Error(w, "Failed to build page", http.StatusInternalServerError)
 			_ = telemetry.Error(span, err)
+		}
+		if err := renderer.tmpl.ExecuteTemplate(w, "list-data", page.Data); err != nil {
 			http.Error(w, "Template rendering failed", http.StatusInternalServerError)
+			_ = telemetry.Error(span, err)
 		}
 	}
 }
@@ -146,19 +151,25 @@ func listEvent(ctx context.Context, renderer *Template, page *ListPage, db Stora
 		}
 		defer func() { _ = rows.Close() }()
 		if !rows.Next() {
-			telemetry.Error(span, fmt.Errorf("listEvent was unable to find activity %d", id))
+			http.Error(w, "Unable to find activity", http.StatusBadRequest)
+			_ = telemetry.Error(span, fmt.Errorf("listEvent was unable to find activity %d", id))
 			return
 		}
 		var year, month, day int
 		if err = rows.Scan(&page.Event.Name, &year, &month, &day); err != nil {
+			http.Error(w, "Unable to find activity", http.StatusBadRequest)
 			_ = telemetry.Error(span, err)
 			return
 		}
 		page.Event.Date = fmt.Sprintf("%d.%d.%d", day, month, year)
 		page.Event.Headers, page.Event.Rows, err = stats.Split(ctx, db, int64(id))
-		if err := renderer.tmpl.ExecuteTemplate(w, "list-event", page.Event); err != nil {
+		if err != nil {
+			http.Error(w, "Failed to build page", http.StatusInternalServerError)
 			_ = telemetry.Error(span, err)
+		}
+		if err := renderer.tmpl.ExecuteTemplate(w, "list-event", page.Event); err != nil {
 			http.Error(w, "Template rendering failed", http.StatusInternalServerError)
+			_ = telemetry.Error(span, err)
 		}
 	}
 }
