@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"html/template"
 	"io"
+	"log/slog"
 	"maps"
+	"net/http"
 	"net/url"
 	"slices"
 	"strconv"
@@ -15,7 +17,6 @@ import (
 	"time"
 
 	"github.com/labstack/echo/v4"
-	"github.com/labstack/echo/v4/middleware"
 
 	"github.com/jylitalo/mystats/pkg/stats"
 	"github.com/jylitalo/mystats/pkg/telemetry"
@@ -23,11 +24,11 @@ import (
 )
 
 type Storage interface {
-	QueryBestEffortDistances() ([]string, error)
-	QuerySports() ([]string, error)
-	QueryWorkouts() ([]string, error)
-	QueryYears(opts ...storage.QueryOption) ([]int, error)
-	Query(fields []string, opts ...storage.QueryOption) (*sql.Rows, error)
+	QueryBestEffortDistances(ctx context.Context) ([]string, error)
+	QuerySports(ctx context.Context) ([]string, error)
+	QueryWorkouts(ctx context.Context) ([]string, error)
+	QueryYears(ctx context.Context, opts ...storage.QueryOption) ([]int, error)
+	Query(ctx context.Context, fields []string, opts ...storage.QueryOption) (*sql.Rows, error)
 }
 
 type TableData struct {
@@ -64,7 +65,7 @@ type pageOptions func(po *pageConfig)
 func newPage(ctx context.Context, db Storage, opts ...pageOptions) (*Page, error) {
 	ctx, span := telemetry.NewSpan(ctx, "server.newPage")
 	defer span.End()
-	allSports, err := db.QuerySports()
+	allSports, err := db.QuerySports(ctx)
 	if err != nil {
 		return nil, telemetry.Error(span, err)
 	}
@@ -88,17 +89,17 @@ func newPage(ctx context.Context, db Storage, opts ...pageOptions) (*Page, error
 			sports[t] = true
 		}
 	}
-	workoutTypes, errW := db.QueryWorkouts()
+	workoutTypes, errW := db.QueryWorkouts(ctx)
 	selectedWT := map[string]bool{}
 	for _, wt := range workoutTypes {
 		selectedWT[wt] = true
 	}
-	dailyStepsYears, errDS := db.QueryYears(storage.WithTable(storage.DailyStepsTable))
-	heartRateYears, errHR := db.QueryYears(storage.WithTable(storage.HeartRateTable))
+	dailyStepsYears, errDS := db.QueryYears(ctx, storage.WithTable(storage.DailyStepsTable))
+	heartRateYears, errHR := db.QueryYears(ctx, storage.WithTable(storage.HeartRateTable))
 	if err := errors.Join(errDS, errHR); err != nil {
 		return nil, err
 	}
-	stravaYears, errStr := db.QueryYears()
+	stravaYears, errStr := db.QueryYears(ctx)
 	be, errBE := newBestPage(ctx, db, cfg.bestStats)
 	hr, errHR := newHeartRatePage(ctx, db, heartRateYears)
 	steps, errSte := newStepsPage(ctx, db, dailyStepsYears, cfg.stepsStats)
@@ -239,7 +240,9 @@ func yearValues(values url.Values) (map[int]bool, error) {
 	return years, nil
 }
 
-func yearToDateQuery(db Storage, day, month int, years []int, table, column string) ([]int, *sql.Rows, error) {
+func yearToDateQuery(
+	ctx context.Context, db Storage, day, month int, years []int, table, column string,
+) ([]int, *sql.Rows, error) {
 	o := []string{"year", "month", "day"}
 	opts := []storage.QueryOption{
 		storage.WithDayOfYear(day, month),
@@ -247,42 +250,54 @@ func yearToDateQuery(db Storage, day, month int, years []int, table, column stri
 		storage.WithOrder(storage.OrderConfig{GroupBy: o, OrderBy: o}),
 	}
 	opts = append(opts, storage.WithYears(years...))
-	rows, err := db.Query(append(o, column), opts...)
+	rows, err := db.Query(ctx, append(o, column), opts...)
 	if err != nil {
 		return nil, nil, fmt.Errorf("select caused: %w", err)
 	}
-	foundYears, err := db.QueryYears(opts...)
+	foundYears, err := db.QueryYears(ctx, opts...)
 	return foundYears, rows, err
 }
 
 func Start(ctx context.Context, db Storage, sports []string, port int) error {
 	ctx, span := telemetry.NewSpan(ctx, "server.start")
 	defer span.End()
-	e := echo.New()
-	e.Renderer = newTemplate("server/views/*.html")
-	e.Use(middleware.Logger())
-	e.Static("/css", "server/css")
 
+	renderer := newTemplate("server/views/*.html")
 	page, err := newPage(ctx, db, func(pc *pageConfig) { pc.sports = sports })
 	if err != nil {
 		return err
 	}
-	e.GET("/", indexGet(ctx, page))
-	e.POST("/best", bestPost(ctx, page.Best, db))
-	e.POST("/event", listEvent(ctx, page.List, db))
-	e.POST("/heartrate", heartRatePost(ctx, page.HeartRate, db))
-	e.POST("/list", listPost(ctx, page.List, db))
-	e.POST("/plot", plotPost(ctx, page.Plot, db))
-	e.POST("/top", topPost(ctx, page.Top, db))
-	e.POST("/steps", stepsPost(ctx, page.Steps, db))
-	e.Logger.Fatal(e.Start(":" + strconv.FormatInt(int64(port), 10)))
-	return nil
+	mux := http.NewServeMux()
+	mux.Handle("/css/", http.StripPrefix("/css/", http.FileServer(http.Dir("server/css"))))
+
+	mux.HandleFunc("/", indexGet(ctx, renderer, page))
+	mux.HandleFunc("/best", bestPost(ctx, renderer, page.Best, db))
+	mux.HandleFunc("/event", listEvent(ctx, renderer, page.List, db))
+	mux.HandleFunc("/heartrate", heartratePost(ctx, renderer, page.HeartRate, db))
+	mux.HandleFunc("/list", listPost(ctx, renderer, page.List, db))
+	mux.HandleFunc("/plot", plotPost(ctx, renderer, page.Plot, db))
+	mux.HandleFunc("/top", topPost(ctx, renderer, page.Top, db))
+	mux.HandleFunc("/steps", stepsPost(ctx, renderer, page.Steps, db))
+	srv := &http.Server{
+		Addr:         "127.0.0.1:" + strconv.Itoa(port),
+		Handler:      mux,              // replace with your mux/router
+		ReadTimeout:  10 * time.Second, // max time to read request headers/body
+		WriteTimeout: 10 * time.Second, // max time to write response
+		IdleTimeout:  60 * time.Second, // keep-alive idle connections
+	}
+	slog.Info("server.Start", "Listening on", port)
+	return srv.ListenAndServe()
 }
 
-func indexGet(ctx context.Context, page *Page) func(c echo.Context) error {
-	return func(c echo.Context) error {
+func indexGet(ctx context.Context, renderer *Template, page *Page) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		_, span := telemetry.NewSpan(ctx, "indexGET")
 		defer span.End()
-		return telemetry.Error(span, c.Render(200, "index", page))
+
+		err := renderer.tmpl.ExecuteTemplate(w, "index", page)
+		if err != nil {
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			_ = telemetry.Error(span, err)
+		}
 	}
 }

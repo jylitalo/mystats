@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"net/http"
 	"net/url"
 	"slices"
 	"strconv"
@@ -11,7 +12,6 @@ import (
 
 	"github.com/jylitalo/mystats/pkg/stats"
 	"github.com/jylitalo/mystats/pkg/telemetry"
-	"github.com/labstack/echo/v4"
 )
 
 type BestFormData struct {
@@ -23,7 +23,7 @@ type BestFormData struct {
 func newBestFormData(ctx context.Context, db Storage) (*BestFormData, error) {
 	_, span := telemetry.NewSpan(ctx, "server.newBestFormData")
 	defer span.End()
-	inOrder, err := db.QueryBestEffortDistances()
+	inOrder, err := db.QueryBestEffortDistances(ctx)
 	if err != nil {
 		return nil, telemetry.Error(span, err)
 	}
@@ -109,19 +109,24 @@ func bestEffortValues(values url.Values) (map[string]bool, error) {
 	return bestEfforts, nil
 }
 
-func bestPost(ctx context.Context, page *BestPage, db Storage) func(c echo.Context) error {
-	return func(c echo.Context) error {
+func bestPost(ctx context.Context, renderer *Template, page *BestPage, db Storage) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		var err, errB, errL error
 
 		ctx, span := telemetry.NewSpan(ctx, "bestPOST")
 		defer span.End()
-		values, err := c.FormParams()
-		page.Form.Distances, errB = bestEffortValues(values)
-		page.Form.Limit, errL = strconv.Atoi(c.FormValue("limit"))
-		if err := errors.Join(err, errB, errL); err != nil {
-			return telemetry.Error(span, err)
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "Invalid form data", http.StatusBadRequest)
+			_ = telemetry.Error(span, err)
+			return
 		}
-		slog.Info("POST /best", "values", values)
+		page.Form.Distances, errB = bestEffortValues(r.Form)
+		page.Form.Limit, errL = strconv.Atoi(r.FormValue("limit"))
+		if err := errors.Join(err, errB, errL); err != nil {
+			_ = telemetry.Error(span, err)
+			return
+		}
+		slog.Info("POST /best", "values", r.Form)
 		selected := selectedBestEfforts(page.Form.Distances)
 		page.Data.Data = []TableData{}
 		for _, distance := range page.Form.InOrder {
@@ -129,7 +134,8 @@ func bestPost(ctx context.Context, page *BestPage, db Storage) func(c echo.Conte
 				continue
 			}
 			if headers, rows, err := page.Data.stats(ctx, db, distance, page.Form.Limit); err != nil {
-				return telemetry.Error(span, err)
+				_ = telemetry.Error(span, err)
+				return
 			} else {
 				page.Data.Data = append(page.Data.Data, TableData{
 					Headers: headers,
@@ -137,6 +143,9 @@ func bestPost(ctx context.Context, page *BestPage, db Storage) func(c echo.Conte
 				})
 			}
 		}
-		return telemetry.Error(span, c.Render(200, "best-data", page.Data))
+		if err := renderer.tmpl.ExecuteTemplate(w, "best-data", page.Data); err != nil {
+			_ = telemetry.Error(span, err)
+			http.Error(w, "Template rendering failed", http.StatusInternalServerError)
+		}
 	}
 }

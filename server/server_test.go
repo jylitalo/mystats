@@ -14,23 +14,23 @@ import (
 
 type testDB struct{}
 
-func (t *testDB) QueryBestEffortDistances() ([]string, error) {
+func (t *testDB) QueryBestEffortDistances(ctx context.Context) ([]string, error) {
 	return nil, nil
 }
 
-func (t *testDB) Query(fields []string, opts ...storage.QueryOption) (*sql.Rows, error) {
+func (t *testDB) Query(ctx context.Context, fields []string, opts ...storage.QueryOption) (*sql.Rows, error) {
 	return nil, nil
 }
 
-func (t *testDB) QuerySports() ([]string, error) {
+func (t *testDB) QuerySports(ctx context.Context) ([]string, error) {
 	return nil, nil
 }
 
-func (t *testDB) QueryWorkouts() ([]string, error) {
+func (t *testDB) QueryWorkouts(ctx context.Context) ([]string, error) {
 	return nil, nil
 }
 
-func (t *testDB) QueryYears(opts ...storage.QueryOption) ([]int, error) {
+func (t *testDB) QueryYears(ctx context.Context, opts ...storage.QueryOption) ([]int, error) {
 	return nil, nil
 }
 

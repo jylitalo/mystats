@@ -10,12 +10,11 @@ import (
 	"log"
 	"log/slog"
 	"maps"
+	"net/http"
 	"slices"
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/labstack/echo/v4"
 
 	"github.com/jylitalo/mystats/pkg/data"
 	"github.com/jylitalo/mystats/pkg/stats"
@@ -172,31 +171,43 @@ func (p *PlotPage) render(
 
 type numbers map[int][]float64
 
-func plotPost(ctx context.Context, page *PlotPage, db Storage) func(c echo.Context) error {
-	return func(c echo.Context) error {
+func plotPost(ctx context.Context, renderer *Template, page *PlotPage, db Storage) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		_, span := telemetry.NewSpan(ctx, "plotPOST")
 		defer span.End()
-		month, errM := strconv.Atoi(c.FormValue("EndMonth"))
-		day, errD := strconv.Atoi(c.FormValue("EndDay"))
-		page.Form.Measure = c.FormValue("Measure")
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "Invalid form data", http.StatusBadRequest)
+			_ = telemetry.Error(span, err)
+			return
+		}
+		month, errM := strconv.Atoi(r.FormValue("EndMonth"))
+		day, errD := strconv.Atoi(r.FormValue("EndDay"))
+		page.Form.Measure = r.FormValue("Measure")
 		page.Data.Measure = page.Form.Measure
-		page.Data.Period = c.FormValue("Period")
+		page.Data.Period = r.FormValue("Period")
 		page.Form.Period = page.Data.Period
-		values, errV := c.FormParams()
+		values := r.Form
 		sports, errS := sportsValues(values)
 		workouts, errW := workoutsValues(values)
 		years, errY := yearValues(values)
-		if err := errors.Join(errM, errD, errV, errS, errW, errY); err != nil {
-			return telemetry.Error(span, err)
+		if err := errors.Join(errM, errD, errS, errW, errY); err != nil {
+			_ = telemetry.Error(span, err)
+			return
 		}
 		slog.Info("POST /plot", "values", values)
-		return telemetry.Error(span, errors.Join(
-			page.render(
-				ctx, db, selectedSports(sports), selectedWorkouts(workouts),
-				month, day, years, page.Data.Period,
-			),
-			c.Render(200, "plot-data", page.Data),
-		))
+		err := page.render(
+			ctx, db, selectedSports(sports), selectedWorkouts(workouts),
+			month, day, years, page.Data.Period,
+		)
+		if err != nil {
+			_ = telemetry.Error(span, err)
+			return
+		}
+		if err := renderer.tmpl.ExecuteTemplate(w, "plot-data", page.Data); err != nil {
+			_ = telemetry.Error(span, err)
+			http.Error(w, "Template rendering failed", http.StatusInternalServerError)
+			return
+		}
 	}
 }
 
@@ -270,7 +281,7 @@ func getNumbers(
 	case "elevation":
 		m = "sum(elevation)"
 	}
-	rows, err := db.Query(append(o, m), opts...)
+	rows, err := db.Query(ctx, append(o, m), opts...)
 	if err != nil {
 		return nil, fmt.Errorf("select caused: %w", err)
 	}
@@ -281,7 +292,7 @@ func getNumbers(
 			}
 		}
 	}()
-	foundYears, err := db.QueryYears(opts...)
+	foundYears, err := db.QueryYears(ctx, opts...)
 	if err != nil {
 		return nil, err
 	}

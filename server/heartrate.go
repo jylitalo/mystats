@@ -9,12 +9,11 @@ import (
 	"html/template"
 	"log"
 	"log/slog"
+	"net/http"
 	"slices"
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/labstack/echo/v4"
 
 	"github.com/jylitalo/mystats/pkg/telemetry"
 	"github.com/jylitalo/mystats/storage"
@@ -137,26 +136,36 @@ func (p *HeartRatePage) render(
 	return err
 }
 
-func heartRatePost(ctx context.Context, page *HeartRatePage, db Storage) func(c echo.Context) error {
-	return func(c echo.Context) error {
+func heartratePost(ctx context.Context, renderer *Template, page *HeartRatePage, db Storage) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		_, span := telemetry.NewSpan(ctx, "heartratePOST")
 		defer span.End()
-		month, errM := strconv.Atoi(c.FormValue("EndMonth"))
-		day, errD := strconv.Atoi(c.FormValue("EndDay"))
-		avg, errA := strconv.Atoi(c.FormValue("Average"))
-		values, errV := c.FormParams()
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "Invalid form data", http.StatusBadRequest)
+			_ = telemetry.Error(span, err)
+			return
+		}
+
+		month, errM := strconv.Atoi(r.FormValue("EndMonth"))
+		day, errD := strconv.Atoi(r.FormValue("EndDay"))
+		avg, errA := strconv.Atoi(r.FormValue("Average"))
+		values := r.Form
 		years, errY := yearValues(values)
-		if err := errors.Join(errA, errM, errD, errV, errY); err != nil {
-			return telemetry.Error(span, err)
+		if err := errors.Join(errA, errM, errD, errY); err != nil {
+			_ = telemetry.Error(span, err)
+			return
 		}
 		if avg < 0 {
 			avg = -avg
 		}
 		page.Form.Average = avg
 		slog.Info("POST /heartrate", "values", values)
-		return telemetry.Error(span, errors.Join(
-			page.render(ctx, db, month, day, years, avg), c.Render(200, "heartrate-data", page.Data),
-		))
+		err := page.render(ctx, db, month, day, years, avg)
+		_ = telemetry.Error(span, err)
+		if err := renderer.tmpl.ExecuteTemplate(w, "heartrate-data", page.Data); err != nil {
+			_ = telemetry.Error(span, err)
+			http.Error(w, "Template rendering failed", http.StatusInternalServerError)
+		}
 	}
 }
 
@@ -165,7 +174,7 @@ func getHeartRate(ctx context.Context, db Storage, month, day int, years []int) 
 	_, span := telemetry.NewSpan(ctx, "server.getHeartRate")
 	defer span.End()
 
-	years, rows, err := yearToDateQuery(db, day, month, years, storage.HeartRateTable, "RestingHR")
+	years, rows, err := yearToDateQuery(ctx, db, day, month, years, storage.HeartRateTable, "RestingHR")
 	if err != nil {
 		return nil, telemetry.Error(span, err)
 	}

@@ -12,8 +12,8 @@ import (
 )
 
 type Storage interface {
-	QueryYears(opts ...storage.QueryOption) ([]int, error)
-	Query(fields []string, opts ...storage.QueryOption) (*sql.Rows, error)
+	QueryYears(ctx context.Context, opts ...storage.QueryOption) ([]int, error)
+	Query(ctx context.Context, fields []string, opts ...storage.QueryOption) (*sql.Rows, error)
 }
 
 func Stats(
@@ -25,7 +25,7 @@ func Stats(
 
 	if years == nil {
 		var err error
-		if years, err = db.QueryYears(); err != nil {
+		if years, err = db.QueryYears(ctx); err != nil {
 			return nil, nil, nil, telemetry.Error(span, err)
 		}
 	}
@@ -55,7 +55,7 @@ func Stats(
 		storage.WithWorkouts(workouts...),
 		storage.WithYears(years...),
 	}
-	rows, err := db.Query([]string{"Year", period, measure}, opts...)
+	rows, err := db.Query(ctx, []string{"Year", period, measure}, opts...)
 	if err != nil {
 		return nil, nil, nil, telemetry.Error(span, fmt.Errorf("select caused: %w", err))
 	}
