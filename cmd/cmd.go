@@ -2,7 +2,7 @@ package cmd
 
 import (
 	"context"
-	"errors"
+	"fmt"
 
 	"github.com/jylitalo/mystats/config"
 	"github.com/spf13/cobra"
@@ -14,11 +14,15 @@ func Execute(ctx context.Context) error {
 		Short: "mystats is tool for fetching your Strava results to your machine",
 	}
 	types := []string{"Run", "Trail Run"}
-	ctx, errR := config.Read(ctx, false)
-	cfg, errG := config.Get(ctx)
-	if err := errors.Join(errR, errG); err == nil {
-		types = cfg.Default.Types
+	ctx, err := config.Read(ctx, false)
+	if err != nil {
+		return fmt.Errorf("config.Read due to %w", err)
 	}
+	cfg, err := config.Get(ctx)
+	if err != nil {
+		return fmt.Errorf("config.Get due to %w", err)
+	}
+	types = cfg.Default.Types
 	rootCmd.AddCommand(
 		configureCmd(), fetchCmd(), makeCmd(),
 		bestCmd(), listCmd(types), statsCmd(types), topCmd(types),

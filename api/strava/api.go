@@ -68,7 +68,7 @@ func (cfg *Config) Refresh() (*Config, bool, error) {
 	)
 	req, err := http.NewRequest(http.MethodPost, url, nil)
 	if err != nil {
-		return nil, false, err
+		return nil, false, fmt.Errorf("refresh request failed due to %w", err)
 	}
 	client := &http.Client{}
 	resp, err := client.Do(req)
@@ -78,12 +78,12 @@ func (cfg *Config) Refresh() (*Config, bool, error) {
 	defer func() { _ = resp.Body.Close() }()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, false, err
+		return nil, false, fmt.Errorf("reading refresh request failed due to %w", err)
 	}
 	slog.Debug("body from token", "body", string(body))
 	tokens := Config{}
 	if err = json.Unmarshal(body, &tokens); err != nil {
-		return nil, false, err
+		return nil, false, fmt.Errorf("parsing refresh request failed due to %w", err)
 	}
 	tokens.ClientID = cfg.ClientID
 	tokens.ClientSecret = cfg.ClientSecret
