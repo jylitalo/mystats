@@ -46,7 +46,7 @@ func Stats(
 		results[idx] = slices.Repeat([]string{"    "}, columns) // helps CSV formatting
 	}
 	measure = strings.ReplaceAll(measure, "(time)", "(elapsedtime)")
-	o := []string{period, "year"}
+	o := []string{period, "Year"}
 	opts := []storage.QueryOption{
 		storage.WithTable(storage.SummaryTable),
 		storage.WithDayOfYear(day, month),
@@ -55,7 +55,11 @@ func Stats(
 		storage.WithWorkouts(workouts...),
 		storage.WithYears(years...),
 	}
-	rows, err := db.Query(ctx, []string{"Year", period, measure}, opts...)
+	yearField := "Year"
+	if period == "week" {
+		yearField = "WeekYear as Year"
+	}
+	rows, err := db.Query(ctx, []string{yearField, period, measure}, opts...)
 	if err != nil {
 		return nil, nil, nil, telemetry.Error(span, fmt.Errorf("select caused: %w", err))
 	}
