@@ -22,6 +22,7 @@ type SummaryRecord struct {
 	Year        int
 	Month       int
 	Day         int
+	WeekYear    int
 	Week        int
 	StravaID    int64
 	Name        string
@@ -190,7 +191,7 @@ func (sq *Sqlite3) Create() error {
 	if sq.db == nil {
 		return errors.New("database is nil")
 	}
-	ymdw := "Year integer, Month integer, Day integer, Week integer,"
+	ymdw := "Year integer, Month integer, Day integer, WeekYear, Week integer,"
 	stravaId := "StravaID integer,"
 	emd := "ElapsedTime integer, MovingTime integer, Distance integer,"
 	_, errSummary := sq.db.Exec(`create table ` + SummaryTable + ` ( ` + ymdw + stravaId + emd + `
@@ -230,7 +231,7 @@ func (sq *Sqlite3) InsertSummary(ctx context.Context, records []SummaryRecord) e
 		return telemetry.Error(span, err)
 	}
 	fields := []string{
-		"Year", "Month", "Day", "Week", "StravaID", "Name", "Type", "SportType", "WorkoutType",
+		"Year", "Month", "Day", "WeekYear", "Week", "StravaID", "Name", "Type", "SportType", "WorkoutType",
 		"Distance", "Elevation", "ElapsedTime", "MovingTime",
 	}
 	q := strings.Repeat("?,", len(fields)-1) + "?"
@@ -242,7 +243,7 @@ func (sq *Sqlite3) InsertSummary(ctx context.Context, records []SummaryRecord) e
 	defer func() { _ = stmt.Close() }()
 	for _, r := range records {
 		_, err = stmt.Exec(
-			r.Year, r.Month, r.Day, r.Week, r.StravaID,
+			r.Year, r.Month, r.Day, r.WeekYear, r.Week, r.StravaID,
 			r.Name, r.Type, r.SportType, r.WorkoutType,
 			r.Distance, r.Elevation, r.ElapsedTime, r.MovingTime,
 		)

@@ -113,12 +113,13 @@ func getDbActivities(activities []strava.ActivitySummary) []storage.SummaryRecor
 	dbActivities := []storage.SummaryRecord{}
 	for _, activity := range activities {
 		t := activity.StartDateLocal
-		year, week := t.ISOWeek()
+		weekYear, week := t.ISOWeek()
 		dbActivities = append(dbActivities, storage.SummaryRecord{
 			StravaID:    activity.Id,
-			Year:        year,
+			Year:        int(t.Year()),
 			Month:       int(t.Month()),
 			Day:         t.Day(),
+			WeekYear:    weekYear,
 			Week:        week,
 			Name:        activity.Name,
 			Type:        activity.Type.String(),
