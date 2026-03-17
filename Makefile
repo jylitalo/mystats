@@ -34,8 +34,8 @@ run/bin: bin # telemetry-up db-up ## Run application binary
 
 .PHONY: test
 test: test/unit # test/app ## Run all tests and show coverage
-	rm -rf ${CMB_TXT_COV_DIR}
-	mkdir -p ${CMB_TXT_COV_DIR}
+	rm -rf ${APP_BIN_DIR} ${CMD_TXT_COV_DIR}
+	mkdir -p ${APP_BIN_DIR} ${CMB_TXT_COV_DIR}
 	go tool covdata textfmt -i=${APP_BIN_DIR},${UNIT_BIN_COV_DIR} -o ${CMB_TXT_COV_DIR}/cover.txt
 	go tool cover -html=${CMB_TXT_COV_DIR}/cover.txt
 
