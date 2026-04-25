@@ -50,7 +50,7 @@ func newTraceProvider(exp sdktrace.SpanExporter) *sdktrace.TracerProvider {
 	// Ensure default SDK resources and the required service name are set.
 	r, err := resource.Merge(
 		resource.Default(),
-                resource.NewWithAttributes(
+		resource.NewWithAttributes(
 			semconv.SchemaURL,
 			semconv.ServiceName("mystats"),
 		),
