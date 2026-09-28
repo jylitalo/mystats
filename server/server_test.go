@@ -79,15 +79,15 @@ func TestTemplateRender(t *testing.T) {
 	var b bytes.Buffer
 	w := bufio.NewWriter(&b)
 	tmpl := newTemplate("views/*.html")
-	err = tmpl.Render(w, "index", p, nil)
+	err = tmpl.Render(w, "index", p)
 	if err != nil {
 		t.Error(err)
 	}
-	err = tmpl.Render(w, "plot-data", p.Plot.Data, nil)
+	err = tmpl.Render(w, "plot-data", p.Plot.Data)
 	if err != nil {
 		t.Error(err)
 	}
-	err = tmpl.Render(w, "plot-form", p.Plot.Form, nil)
+	err = tmpl.Render(w, "plot-form", p.Plot.Form)
 	if err != nil {
 		t.Error(err)
 	}
