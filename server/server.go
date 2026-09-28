@@ -16,8 +16,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/labstack/echo/v4"
-
 	"github.com/jylitalo/mystats/pkg/stats"
 	"github.com/jylitalo/mystats/pkg/telemetry"
 	"github.com/jylitalo/mystats/storage"
@@ -159,7 +157,7 @@ func newTemplate(path string) *Template {
 	}
 }
 
-func (t *Template) Render(w io.Writer, name string, data interface{}, c echo.Context) error {
+func (t *Template) Render(w io.Writer, name string, data interface{}) error {
 	return t.tmpl.ExecuteTemplate(w, name, data)
 }
 
